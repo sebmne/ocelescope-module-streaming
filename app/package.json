@@ -11,6 +11,8 @@
 	},
 	"dependencies": {
 		"@ocelescope/core": "catalog:",
+		"@ocelescope/discovery": "catalog:",
+		"@ocelescope/log-overview": "catalog:",
 		"@ocelescope/management": "catalog:",
 		"next": "catalog:",
 		"react": "catalog:",

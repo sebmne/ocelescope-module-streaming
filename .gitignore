@@ -23,3 +23,5 @@ compose.override.yaml
 # Tool caches
 .pytest_cache/
 .ruff_cache/
+*.tsbuildinfo
+.claude/
