@@ -11,9 +11,16 @@ pnpm run dev     # backend on :8000, frontend on :3000
    `data/`), or upload an OCEL.
 2. Open **Streaming**. In the panel on the right:
    - **Preset**: fills the form with a published configuration (optional).
-   - **Algorithm** and its parameters.
-   - **Stream items**: events, O2O updates, attribute updates. Positions count
-     every replayed item, so this changes position-based heuristics.
+   - **Target model**: grouped by kind of model (process tree, DF2 graph,
+     OC-DFG, TOTeM); the info icon explains the selected algorithm. The OCPT
+     is generated with the inductive miner from the DF2 graph. There are two
+     OC-DFG algorithms: *counts* keeps counters bounded by the log's
+     vocabulary and records end activities on eviction; *Liss et al.* keeps
+     one entry per observation, so its arc buffer grows with the stream and
+     must be bounded too.
+   - **Stream items**: events, O2O updates, attribute updates; the
+     algorithm's default is preselected. Positions count every replayed item,
+     so this changes position-based heuristics.
    - **Buffers**: the buffers that grow with the stream (e.g. objects) come
      first. **Quick setup** configures all of them at once; each buffer can
      then be adjusted with a switch between *Unbounded*, *Capacity*,
@@ -46,15 +53,16 @@ run:
 ```python
 from ocelescope import OCEL
 
-from ocelescope_module_streaming.algorithms import OCPTParams, StreamingOCPT, compare_ocpts, offline_ocpt
+from ocelescope_module_streaming.algorithms import StreamingOCPT, compare_ocpts, offline_ocpt
 from ocelescope_module_streaming.evaluation import BufferMonitor
+from ocelescope_module_streaming.catalog import NoParams
 from ocelescope_module_streaming.framework import BufferConfig, run
 from ocelescope_module_streaming.heuristics import FIFO
 from ocelescope_module_streaming.ocel import ocel_stream
 from ocelescope_module_streaming.stream import StreamOptions
 
 ocel = OCEL.read_duckdb("data/event_logs/container_logistics.db")
-algorithm = StreamingOCPT(OCPTParams(), {"objects": BufferConfig(capacity=500, heuristic=FIFO())})
+algorithm = StreamingOCPT(NoParams(), {"objects": BufferConfig(capacity=500, heuristic=FIFO())})
 monitor = BufferMonitor()
 with ocel_stream(ocel, StreamOptions(object_to_object=False, attribute_updates=False)) as stream:
     model = run(algorithm, stream, [monitor])

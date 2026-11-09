@@ -8,8 +8,8 @@ import pytest
 from ocelescope import OCEL
 from support import event, stream_of
 
-from ocelescope_module_streaming.algorithms import OCPTParams, StreamingOCPT, compare_ocpts, offline_ocpt
-from ocelescope_module_streaming.catalog import algorithms
+from ocelescope_module_streaming.algorithms import StreamingOCPT, compare_ocpts, offline_ocpt
+from ocelescope_module_streaming.catalog import NoParams, algorithms
 from ocelescope_module_streaming.framework import run
 from ocelescope_module_streaming.models import OCPT, DF2InductiveMiner, ProcessTreeNode
 from ocelescope_module_streaming.ocel import ocel_stream
@@ -48,7 +48,7 @@ def test_no_cut_is_explicit() -> None:
 
 
 def test_order_example_leaves_are_annotated(order_stream: list[StreamItem]) -> None:
-    ocpt = run(StreamingOCPT(OCPTParams()), order_stream)
+    ocpt = run(StreamingOCPT(NoParams()), order_stream)
     assert ocpt.root is not None
     leaves = {leaf.activity: leaf for leaf in _leaves(ocpt.root)}
     assert leaves["Place order"].rel == ["customer", "item", "order"]
@@ -57,26 +57,26 @@ def test_order_example_leaves_are_annotated(order_stream: list[StreamItem]) -> N
 
 
 def test_surgery_tree(surgery_stream: list[StreamItem]) -> None:
-    ocpt = run(StreamingOCPT(OCPTParams()), surgery_stream)
+    ocpt = run(StreamingOCPT(NoParams()), surgery_stream)
     assert ocpt.root is not None and ocpt.root.kind == "activity"
     assert ocpt.root.div == ["doctor"] and ocpt.root.rel == ["doctor", "patient"]
 
 
 def test_empty_stream_gives_empty_tree() -> None:
-    assert run(StreamingOCPT(OCPTParams()), []).root is None
+    assert run(StreamingOCPT(NoParams()), []).root is None
 
 
 def test_unbounded_equals_offline(container_logistics: OCEL) -> None:
     spec = algorithms.get("ocpt")
     with ocel_stream(container_logistics, spec.stream) as stream:
-        ocpt = run(StreamingOCPT(OCPTParams()), stream)
+        ocpt = run(StreamingOCPT(NoParams()), stream)
     reference = offline_ocpt(container_logistics)
     assert ocpt == reference
     assert all(score.f1 == 1.0 for score in compare_ocpts(ocpt, reference).values())
 
 
 def test_resource_round_trip_and_visualization(order_stream: list[StreamItem]) -> None:
-    ocpt = run(StreamingOCPT(OCPTParams()), [*order_stream, *stream_of(event("x", t="1"))])
+    ocpt = run(StreamingOCPT(NoParams()), [*order_stream, *stream_of(event("x", t="1"))])
     assert OCPT.model_validate(ocpt.model_dump()) == ocpt
     graph = ocpt.visualize()
     assert len(graph.nodes) == len(graph.edges) + 1

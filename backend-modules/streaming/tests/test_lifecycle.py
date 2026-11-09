@@ -7,8 +7,9 @@ from typing import Any
 import pytest
 from support import START, event, obj, step, stream_of
 
-from ocelescope_module_streaming.algorithms import OCPTParams, StreamingOCPT
+from ocelescope_module_streaming.algorithms import StreamingOCPT
 from ocelescope_module_streaming.blocks import LastSeen, ObjectTracker
+from ocelescope_module_streaming.catalog import NoParams
 from ocelescope_module_streaming.framework import (
     Buffer,
     BufferConfig,
@@ -179,5 +180,5 @@ def test_lifecycle_preset_runs(order_stream: list[StreamItem]) -> None:
     assert isinstance(prepared.algorithm, StreamingOCPT)
     objects = prepared.algorithm.buffers[0]
     assert isinstance(objects.heuristic, Lifecycle) and objects.mode is EvictionMode.EXPIRY
-    exact = run(StreamingOCPT(OCPTParams()), order_stream)
+    exact = run(StreamingOCPT(NoParams()), order_stream)
     assert run(prepared.algorithm, order_stream) == exact  # far below t_hint: nothing evicted

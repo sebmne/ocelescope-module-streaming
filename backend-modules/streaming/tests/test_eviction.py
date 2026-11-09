@@ -205,6 +205,6 @@ def test_prepare_run_supports_expiry_buffers() -> None:
     prepared = prepare_run(RunConfig(ocel_id="log", algorithm="ocdfg", buffers={"objects": setting}))
     objects = prepared.algorithm.buffers[0]
     assert objects.mode is EvictionMode.EXPIRY and objects.capacity is None
-    assert prepared.name == "Streaming OC-DFG (objects Max age)"
+    assert prepared.name == "OC-DFG (counts) (objects Max age)"
     with pytest.raises(InvalidRunConfig, match="does not support expiry"):
         prepare_run(RunConfig(ocel_id="log", algorithm="ocdfg", buffers={"objects": BufferSetting(heuristic="fifo")}))

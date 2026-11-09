@@ -8,6 +8,18 @@ import type {
   StreamSettings,
 } from "../../api/streaming";
 
+/** The order in which kinds of models are offered; other kinds follow alphabetically. */
+const MODEL_ORDER = ["Process tree", "DF2 graph", "OC-DFG", "TOTeM"];
+
+/** Algorithms ordered by kind of model, keeping the catalog order within a kind. */
+export function sortAlgorithms(algorithms: AlgorithmInfo[]): AlgorithmInfo[] {
+  const rank = (model: string) => {
+    const index = MODEL_ORDER.indexOf(model);
+    return index === -1 ? MODEL_ORDER.length : index;
+  };
+  return [...algorithms].sort((a, b) => rank(a.model) - rank(b.model) || a.model.localeCompare(b.model));
+}
+
 /** Default capacity offered when a buffer gets a fixed capacity. */
 export const DEFAULT_CAPACITY = 1000;
 

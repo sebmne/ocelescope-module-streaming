@@ -18,7 +18,6 @@ from ocelescope_module_streaming.algorithms.liss import (
 )
 from ocelescope_module_streaming.algorithms.ocdfg import StreamingOCDFG, compare_ocdfgs
 from ocelescope_module_streaming.algorithms.ocpt import (
-    OCPTParams,
     StreamingOCPT,
     build_ocpt,
     compare_ocpts,
@@ -34,7 +33,6 @@ __all__ = [
     "build_liss_ocdfg",
     "compare_totems",
     "offline_totem",
-    "OCPTParams",
     "StreamingDF2",
     "StreamingOCDFG",
     "StreamingOCPT",

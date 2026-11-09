@@ -51,8 +51,12 @@ class LifecycleParams(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    t_hint: int = Field(default=200, ge=0, description="Inactivity during which an object is always kept.")
-    t_max: int = Field(default=2000, ge=1, description="Inactivity after which an object is always evicted.")
+    t_hint: int = Field(
+        default=200, ge=0, title="T_hint", description="Inactivity during which an object is always kept."
+    )
+    t_max: int = Field(
+        default=2000, ge=1, title="T_max", description="Inactivity after which an object is always evicted."
+    )
 
     @model_validator(mode="after")
     def _ordered(self) -> Self:

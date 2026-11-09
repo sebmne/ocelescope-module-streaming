@@ -59,14 +59,18 @@ class LissParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     coupled_removal: bool = Field(
-        default=False, description="After each item, keep only entries of object types present in every buffer."
+        default=False,
+        title="Coupled removal",
+        description="After each item, keep only entries of object types present in every buffer.",
     )
 
 
 class TotemParams(LissParams):
     """Parameters of `LissTotem`."""
 
-    tau: float = Field(default=1.0, ge=0, le=1, description="Share of observations a relation must hold for.")
+    tau: float = Field(
+        default=1.0, ge=0, le=1, title="Threshold τ", description="Share of observations a relation must hold for."
+    )
 
 
 # OC-DFG
@@ -114,8 +118,14 @@ def compare_liss_ocdfgs(streaming: DirectlyFollowsGraph, reference: DirectlyFoll
 
 @register_algorithm(
     key="liss_ocdfg",
-    label="Streaming OC-DFG (Liss et al.)",
-    description="OC-DFG from a buffer of arc observations; the model is the buffer content (Liss et al. 2025).",
+    label="OC-DFG (Liss et al.)",
+    description=(
+        "Object-centric directly-follows graph as in Liss et al. (2025). "
+        "Keeps one entry per directly-follows observation; the model is computed from the buffered "
+        "observations, so bounding the arc buffer forgets old behavior. End activities are those without "
+        "outgoing arcs."
+    ),
+    model="OC-DFG",
     buffers=(
         BufferSpec(
             "objects",
@@ -294,8 +304,12 @@ def compare_totems(streaming: Totem, reference: Totem) -> dict[str, ElementScore
 
 @register_algorithm(
     key="liss_totem",
-    label="Streaming TOTeM (Liss et al.)",
-    description="Temporal object type model from buffers of lifespans and cardinality observations (Liss et al. 2025).",
+    label="TOTeM",
+    description=(
+        "Temporal object type model as in Liss et al. (2025): temporal relations, log and event cardinalities "
+        "between object types, computed from buffered lifespans and cardinality observations."
+    ),
+    model="TOTeM",
     buffers=(
         BufferSpec("lifespans", "Lifespans", "First and last event time per object. Grows with the number of objects."),
         BufferSpec(

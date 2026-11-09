@@ -154,7 +154,7 @@ most `max(capacity, keys touched by the item)` entries.
 |---|---|---|---|
 | `ocdfg` | OC-DFG (`DirectlyFollowsGraph`) | objects, arcs, starts, ends | counters; end activities from evicted and live objects |
 | `df2` | `DF2Graph` | + activities, relations, divergence, divergent | Mühlmeyer et al. 2026 |
-| `ocpt` | `OCPT` (process tree) | as `df2` | Mühlmeyer et al. 2026 |
+| `ocpt` | `OCPT` (process tree, inductive miner on the DF2 graph) | as `df2` | Mühlmeyer et al. 2026 |
 | `liss_ocdfg` | OC-DFG | objects, arcs (observation log) | Liss et al. 2025 |
 | `liss_totem` | `Totem` | lifespans, log_cardinality, event_cardinality | Liss et al. 2025 |
 

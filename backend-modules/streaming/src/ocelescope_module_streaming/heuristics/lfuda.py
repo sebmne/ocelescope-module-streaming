@@ -15,7 +15,9 @@ class LFUDAParams(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    max_counter: int = Field(default=100_000, ge=1, description="Cache age at which all ages are reset.")
+    max_counter: int = Field(
+        default=100_000, ge=1, title="Age reset", description="Cache age at which all ages are reset."
+    )
 
 
 @register_heuristic(

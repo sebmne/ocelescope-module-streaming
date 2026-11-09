@@ -12,7 +12,7 @@ def test_prepare_run_builds_configured_buffers() -> None:
     prepared = prepare_run(config(objects=BufferSetting(capacity=10, heuristic="random", heuristic_params={"seed": 4})))
     objects = prepared.algorithm.buffers[0]
     assert objects.capacity == 10 and isinstance(objects.heuristic, RandomReplacement)
-    assert prepared.name == "Streaming OC-DFG (objects Random 10)"
+    assert prepared.name == "OC-DFG (counts) (objects Random 10)"
 
 
 @pytest.mark.parametrize(

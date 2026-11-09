@@ -201,11 +201,21 @@ class PriorityParams(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    cache: str = Field(default="fifo", description="Key of the cache policy combined with the priority.")
-    cache_params: dict[str, Any] = Field(default_factory=dict, description="Parameters of the cache policy.")
-    feature: FeatureName = Field(default="stride_per_type", description="The object-type characteristic.")
-    order: Order = Field(default="min", description="Evict types with the smallest (min) or largest (max) value.")
-    custom_order: list[str] = Field(default_factory=list, description="Object types for the custom feature.")
+    cache: str = Field(
+        default="fifo", title="Cache policy", description="Key of the cache policy combined with the priority."
+    )
+    cache_params: dict[str, Any] = Field(
+        default_factory=dict, title="Cache policy parameters", description="Parameters of the cache policy."
+    )
+    feature: FeatureName = Field(
+        default="stride_per_type", title="Object-type feature", description="The object-type characteristic."
+    )
+    order: Order = Field(
+        default="min", title="Order", description="Evict types with the smallest (min) or largest (max) value."
+    )
+    custom_order: list[str] = Field(
+        default_factory=list, title="Custom type order", description="Object types for the custom feature."
+    )
 
 
 def _combine(rank: float, types: tuple[str | None, ...], priorities: dict[str, float]) -> float:

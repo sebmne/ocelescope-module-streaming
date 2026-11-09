@@ -13,7 +13,7 @@ class MaxAgeParams(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    age: int = Field(default=1000, ge=0, description="Number of stream items a key may stay unwritten.")
+    age: int = Field(default=1000, ge=0, title="Age", description="Number of stream items a key may stay unwritten.")
 
 
 @register_heuristic(

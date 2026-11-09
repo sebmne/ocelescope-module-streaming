@@ -52,8 +52,14 @@ def compare_ocdfgs(streaming: DirectlyFollowsGraph, reference: DirectlyFollowsGr
 
 @register_algorithm(
     key="ocdfg",
-    label="Streaming OC-DFG",
-    description="Discovers an object-centric directly-follows graph with start and end activities per object type.",
+    label="OC-DFG (counts)",
+    description=(
+        "Object-centric directly-follows graph from counters. "
+        "Counts arcs, start and end activities per object type. Only the last activity of each object has to be "
+        "remembered; the counts are bounded by the log's vocabulary. End activities are recorded when an object "
+        "is evicted."
+    ),
+    model="OC-DFG",
     buffers=(
         BufferSpec(
             "objects",

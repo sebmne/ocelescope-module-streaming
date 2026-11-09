@@ -77,6 +77,7 @@ class AlgorithmSpec:
         key: The unique identifier.
         label: A human-readable name.
         description: What the algorithm discovers.
+        model: The kind of model it discovers, e.g. "OC-DFG"; used to group algorithms.
         buffers: The buffers of the algorithm, in eviction order.
         params: The pydantic model of the algorithm's parameters.
         stream: The item kinds the algorithm consumes by default.
@@ -88,6 +89,7 @@ class AlgorithmSpec:
     key: str
     label: str
     description: str
+    model: str
     buffers: tuple[BufferSpec, ...]
     params: type[BaseModel]
     stream: StreamOptions

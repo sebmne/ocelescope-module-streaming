@@ -94,6 +94,7 @@ def offline_reference(ocel: OCEL) -> DirectlyFollowsGraph:
     key="example_divergence_aware_ocdfg",
     label="Divergence-aware OC-DFG",
     description="An OC-DFG without the arcs of object types that diverge on both activities.",
+    model="OC-DFG",
     buffers=BUFFERS,
     stream=EVENTS_ONLY,
     offline=offline_reference,
@@ -131,7 +132,10 @@ class DivergenceAwareOCDFG(StreamingAlgorithm[DirectlyFollowsGraph]):
 What `register_algorithm` needs:
 
 - `key`, `label`, `description`: the catalog entry. The key is stored in run
-  configurations; do not rename it later.
+  configurations; do not rename it later. The description is shown as the
+  algorithm's tooltip in the form.
+- `model`: the kind of model, e.g. `"OC-DFG"` or `"Process tree"`. The form
+  groups algorithms by it.
 - `buffers`: one `BufferSpec(name, label, description, bounded_by)` per
   buffer, in eviction order. The names are what `create_buffers`,
   `RunConfig.buffers` and the frontend use; labels and descriptions are shown

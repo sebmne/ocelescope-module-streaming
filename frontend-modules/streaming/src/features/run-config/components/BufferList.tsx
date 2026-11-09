@@ -15,6 +15,7 @@ import { useElementSize } from "@mantine/hooks";
 import { InfoIcon } from "lucide-react";
 import { useState } from "react";
 import type { BufferInfo, HeuristicInfo } from "../../../api/streaming";
+import { LabelWithInfo } from "../../../components/LabelWithInfo";
 import { SchemaForm } from "../../../components/SchemaForm";
 import {
   BUFFER_MODES,
@@ -104,7 +105,6 @@ type ModeSwitchProps = {
 /** Switches between the eviction modes that at least one heuristic supports. */
 function ModeSwitch({ heuristics, value, onChange }: ModeSwitchProps) {
   const modes = BUFFER_MODES.filter((mode) => mode.value === "unbounded" || heuristicsFor(heuristics, mode.value).length);
-  const current = BUFFER_MODES.find((mode) => mode.value === value);
   // Side by side if the labels fit, stacked in a narrow panel.
   const { ref, width } = useElementSize();
   const vertical = width > 0 && width < modes.length * 72;
@@ -125,11 +125,6 @@ function ModeSwitch({ heuristics, value, onChange }: ModeSwitchProps) {
           ),
         }))}
       />
-      {current && (
-        <Text size="xs" c="dimmed" mt={4}>
-          {current.description}
-        </Text>
-      )}
     </div>
   );
 }
@@ -175,7 +170,7 @@ function QuickSetup({ heuristics, count, onApply }: QuickSetupProps) {
               />
             )}
             <Select
-              label="Heuristic"
+              label={selected ? <LabelWithInfo label="Heuristic" info={selected.description} /> : "Heuristic"}
               size="xs"
               data={candidates.map((candidate) => ({ value: candidate.key, label: candidate.label }))}
               value={selected?.key ?? null}
@@ -265,7 +260,7 @@ function BufferCard({ buffer, heuristics, value, onChange }: BufferCardProps) {
                 />
               )}
               <Select
-                label="Heuristic"
+                label={heuristic ? <LabelWithInfo label="Heuristic" info={heuristic.description} /> : "Heuristic"}
                 size="xs"
                 data={candidates.map((candidate) => ({ value: candidate.key, label: candidate.label }))}
                 value={heuristic ? heuristic.key : null}
@@ -274,16 +269,11 @@ function BufferCard({ buffer, heuristics, value, onChange }: BufferCardProps) {
               />
             </Group>
             {heuristic && (
-              <>
-                <Text size="xs" c="dimmed">
-                  {heuristic.description}
-                </Text>
-                <SchemaForm
-                  schema={heuristic.params_schema}
-                  value={value.heuristicParams}
-                  onChange={(heuristicParams) => onChange({ heuristicParams })}
-                />
-              </>
+              <SchemaForm
+                schema={heuristic.params_schema}
+                value={value.heuristicParams}
+                onChange={(heuristicParams) => onChange({ heuristicParams })}
+              />
             )}
           </>
         )}

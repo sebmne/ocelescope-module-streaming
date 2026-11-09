@@ -173,8 +173,12 @@ class DF2Miner(StreamingAlgorithm[Any]):
 
 @register_algorithm(
     key="df2",
-    label="Streaming DF2 graph",
-    description="Discovers the divergence-free directly-follows graph of Mühlmeyer et al. (2026).",
+    label="DF2 graph",
+    description=(
+        "Divergence-free directly-follows graph (Mühlmeyer et al. 2026): directly-follows relations without "
+        "those caused by divergent object types. The basis of the OCPT."
+    ),
+    model="DF2 graph",
     buffers=DF2_BUFFERS,
     stream=EVENTS_ONLY,
     offline=offline_df2,

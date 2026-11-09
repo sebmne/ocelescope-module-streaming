@@ -50,7 +50,7 @@ class RandomParams(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    seed: int = Field(default=0, description="Seed of the random number generator, for repeatable runs.")
+    seed: int = Field(default=0, title="Seed", description="Seed of the random number generator, for repeatable runs.")
 
 
 @register_heuristic(key="random", label="Random", description="Evicts a random key.", params=RandomParams)

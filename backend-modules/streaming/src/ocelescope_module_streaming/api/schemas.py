@@ -52,6 +52,7 @@ class AlgorithmInfo(BaseModel):
     key: str
     label: str
     description: str
+    model: str
     buffers: list[BufferInfo]
     stream: StreamSettings
     params_schema: dict[str, Any]
@@ -62,6 +63,7 @@ class AlgorithmInfo(BaseModel):
             key=spec.key,
             label=spec.label,
             description=spec.description,
+            model=spec.model,
             buffers=[
                 BufferInfo(name=b.name, label=b.label, description=b.description, bounded_by=b.bounded_by)
                 for b in spec.buffers
