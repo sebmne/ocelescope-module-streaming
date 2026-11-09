@@ -6,7 +6,7 @@ from ocelescope_backend.app.internal.tasks.base import TaskSummary
 from pydantic import BaseModel
 
 from ocelescope_module_streaming.catalog import ElementScores
-from ocelescope_module_streaming.evaluation import BufferStatistics
+from ocelescope_module_streaming.evaluation import BufferSizeSeries, BufferStatistics
 from ocelescope_module_streaming.runs.config import RunConfig
 
 
@@ -31,6 +31,7 @@ class RunResult(BaseModel):
         scores: Agreement with the reference model, per element kind.
         buffers: Statistics per buffer name.
         duration_seconds: The time spent processing the stream.
+        buffer_sizes: Buffer sizes sampled during the run, if requested.
     """
 
     streaming_resource_id: str
@@ -38,6 +39,7 @@ class RunResult(BaseModel):
     scores: dict[str, ElementScores]
     buffers: dict[str, BufferStatistics]
     duration_seconds: float
+    buffer_sizes: BufferSizeSeries | None = None
 
 
 class RunSummary(TaskSummary):

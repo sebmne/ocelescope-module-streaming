@@ -1,4 +1,4 @@
-import { Alert, Button, Divider, List, ScrollArea, Stack, TextInput } from "@mantine/core";
+import { Alert, Button, Checkbox, Divider, List, ScrollArea, Stack, TextInput } from "@mantine/core";
 import { useQueryClient } from "@tanstack/react-query";
 import { PlayIcon } from "lucide-react";
 import { type Catalog, getListRunsQueryKey, type RunSummary, useStartRun } from "../../../api/streaming";
@@ -6,6 +6,7 @@ import { useRunForm } from "../hooks/useRunForm";
 import { toRunConfig } from "../model";
 import { AlgorithmSection } from "./AlgorithmSection";
 import { BufferList } from "./BufferList";
+import { PresetSection } from "./PresetSection";
 import { StreamSection } from "./StreamSection";
 
 type RunFormProps = {
@@ -33,6 +34,12 @@ export function RunForm({ catalog, ocelId, onStarted }: RunFormProps) {
     <Stack gap={0} h="100%">
       <ScrollArea flex={1} mih={0} offsetScrollbars>
         <Stack gap="md" px="md" py="xs">
+          <PresetSection
+            presets={catalog.presets}
+            algorithms={catalog.algorithms}
+            selected={state.preset}
+            onApply={(preset, algorithm) => dispatch({ type: "applyPreset", preset, algorithm })}
+          />
           <AlgorithmSection
             algorithms={catalog.algorithms}
             selected={algorithm}
@@ -46,6 +53,7 @@ export function RunForm({ catalog, ocelId, onStarted }: RunFormProps) {
             heuristics={catalog.heuristics}
             values={state.buffers}
             onChange={(buffer, patch) => dispatch({ type: "updateBuffer", buffer, patch })}
+            onChangeMany={(buffers, patch) => dispatch({ type: "updateBuffers", buffers, patch })}
           />
           <TextInput
             label="Run name"
@@ -80,6 +88,13 @@ export function RunForm({ catalog, ocelId, onStarted }: RunFormProps) {
         >
           Start run
         </Button>
+        <Checkbox
+          size="xs"
+          label="Monitor buffer sizes"
+          description="Records the entries of every buffer at 200 points of the run and plots them."
+          checked={state.monitorBuffers}
+          onChange={(event) => dispatch({ type: "setMonitorBuffers", monitorBuffers: event.currentTarget.checked })}
+        />
       </Stack>
     </Stack>
   );

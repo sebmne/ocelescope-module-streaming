@@ -61,13 +61,18 @@ def prepare_run(config: RunConfig) -> PreparedRun:
 
 
 def _buffer_config(name: str, setting: BufferSetting) -> BufferConfig:
-    if setting.capacity is None:
-        return BufferConfig()
     if setting.heuristic is None:
-        raise InvalidRunConfig(f"Buffer {name} has a capacity but no heuristic")
+        if setting.capacity is not None:
+            raise InvalidRunConfig(f"Buffer {name} has a capacity but no heuristic")
+        if setting.mode is not None:
+            raise InvalidRunConfig(f"Buffer {name} has mode {setting.mode} but no heuristic")
+        return BufferConfig()
     heuristic = _lookup(heuristics.get, setting.heuristic)
     params = _validate(heuristic.params, setting.heuristic_params, f"parameters of {heuristic.label} for {name}")
-    return BufferConfig(capacity=setting.capacity, heuristic=heuristic.factory(params))
+    try:
+        return BufferConfig(capacity=setting.capacity, heuristic=heuristic.factory(params), mode=setting.mode)
+    except ValueError as error:
+        raise InvalidRunConfig(f"Buffer {name}: {error}") from error
 
 
 def _lookup(get: Any, key: str) -> Any:
@@ -86,8 +91,14 @@ def _validate(model: type[BaseModel], values: dict[str, Any], what: str) -> Base
 
 def _default_name(spec: AlgorithmSpec, config: RunConfig) -> str:
     bounded = [
-        f"{name} {heuristics.get(setting.heuristic).label} {setting.capacity}"
+        " ".join(
+            [
+                name,
+                heuristics.get(setting.heuristic).label,
+                *([str(setting.capacity)] if setting.capacity is not None else []),
+            ]
+        )
         for name, setting in config.buffers.items()
-        if setting.capacity is not None and setting.heuristic is not None
+        if setting.heuristic is not None
     ]
     return f"{spec.label} ({', '.join(bounded) or 'unbounded'})"

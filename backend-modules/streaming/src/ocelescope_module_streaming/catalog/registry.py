@@ -109,6 +109,7 @@ def register_heuristic(
                 label=label,
                 description=description,
                 params=params,
+                modes=cls.supported_modes(),
                 factory=lambda values: cls(**values.model_dump()),
             )
         )
@@ -121,6 +122,7 @@ def register_algorithm(
     key: str,
     label: str,
     description: str,
+    model: str,
     buffers: tuple[BufferSpec, ...],
     stream: StreamOptions,
     offline: Callable[[Any], Any],
@@ -136,6 +138,7 @@ def register_algorithm(
         key: The unique identifier.
         label: A human-readable name.
         description: What the algorithm discovers.
+        model: The kind of model it discovers, e.g. "OC-DFG"; the frontend groups algorithms by it.
         buffers: The buffers of the algorithm, in eviction order.
         stream: The item kinds the algorithm consumes by default.
         offline: Discovers the reference model from the complete log.
@@ -152,6 +155,7 @@ def register_algorithm(
                 key=key,
                 label=label,
                 description=description,
+                model=model,
                 buffers=buffers,
                 params=params,
                 stream=stream,

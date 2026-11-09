@@ -4,7 +4,9 @@ import { useRef, useState } from "react";
 import { RunSidebar } from "../features/run-config/components/RunSidebar";
 import { RunCanvas } from "../features/runs/components/RunCanvas";
 import { RunSummaryBar } from "../features/runs/components/RunSummaryBar";
+import { BufferSizePlots } from "../features/runs/components/BufferSizePlots";
 import { RunToolbar } from "../features/runs/components/RunToolbar";
+import { useBufferLabel } from "../features/runs/hooks/useBufferLabel";
 import { useRuns } from "../features/runs/hooks/useRuns";
 import type { ModelView } from "../features/runs/lib/modelView";
 
@@ -19,6 +21,7 @@ export default function StreamingPage() {
   const runs = useRuns();
 
   const selected = runs.data?.find((run) => run.id === selectedRunId) ?? runs.data?.[0];
+  const bufferLabel = useBufferLabel(selected?.config.algorithm ?? "");
 
   return (
     <Splitter
@@ -39,6 +42,9 @@ export default function StreamingPage() {
             onToggleSettings={() => splitterRef.current?.toggleCollapse(1)}
           />
           {selected?.result && <RunSummaryBar run={selected} result={selected.result} />}
+          {selected?.result?.buffer_sizes && (
+            <BufferSizePlots series={selected.result.buffer_sizes} bufferLabel={bufferLabel} />
+          )}
           <Box flex={1} mih={0} pos="relative">
             <RunCanvas run={selected} view={view} isLoading={runs.isPending} />
           </Box>

@@ -1,7 +1,8 @@
-import { Select, Stack, Text } from "@mantine/core";
+import { Select, Stack } from "@mantine/core";
 import type { AlgorithmInfo } from "../../../api/streaming";
-import { SchemaForm } from "../../../components/SchemaForm";
-import type { Params } from "../model";
+import { LabelWithInfo } from "../../../components/LabelWithInfo";
+import { hasParameters, SchemaForm } from "../../../components/SchemaForm";
+import { type Params, sortAlgorithms } from "../model";
 
 type AlgorithmSectionProps = {
   algorithms: AlgorithmInfo[];
@@ -11,12 +12,20 @@ type AlgorithmSectionProps = {
   onParamsChange: (params: Params) => void;
 };
 
+/** The target model: algorithms grouped by the kind of model they discover. */
 export function AlgorithmSection({ algorithms, selected, params, onSelect, onParamsChange }: AlgorithmSectionProps) {
+  const sorted = sortAlgorithms(algorithms);
+  const models = [...new Set(sorted.map((algorithm) => algorithm.model))];
   return (
     <Stack gap="xs">
       <Select
-        label="Algorithm"
-        data={algorithms.map((algorithm) => ({ value: algorithm.key, label: algorithm.label }))}
+        label={<LabelWithInfo label="Target model" info={selected.description} />}
+        data={models.map((model) => ({
+          group: model,
+          items: sorted
+            .filter((algorithm) => algorithm.model === model)
+            .map((algorithm) => ({ value: algorithm.key, label: algorithm.label })),
+        }))}
         value={selected.key}
         allowDeselect={false}
         onChange={(key) => {
@@ -24,10 +33,9 @@ export function AlgorithmSection({ algorithms, selected, params, onSelect, onPar
           if (algorithm) onSelect(algorithm);
         }}
       />
-      <Text size="sm" c="dimmed">
-        {selected.description}
-      </Text>
-      <SchemaForm schema={selected.params_schema} value={params} onChange={onParamsChange} />
+      {hasParameters(selected.params_schema) && (
+        <SchemaForm schema={selected.params_schema} value={params} onChange={onParamsChange} />
+      )}
     </Stack>
   );
 }

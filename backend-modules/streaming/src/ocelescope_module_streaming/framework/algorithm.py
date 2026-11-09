@@ -61,6 +61,12 @@ class StreamingAlgorithm(ABC, Generic[M]):
             position: The 1-based position of the item in the stream.
         """
 
+    def after_evictions(self, position: int) -> None:  # noqa: B027
+        """Called once per item after all evictions, e.g. to synchronize buffers.
+
+        Does nothing by default. Removals here should use `Buffer.discard`.
+        """
+
     def finish(self, buffer: Buffer[Any, Any], key: Any, value: Any) -> None:  # noqa: B027
         """Handles an eviction. Does nothing by default.
 

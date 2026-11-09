@@ -1,5 +1,6 @@
-import { Checkbox, Stack } from "@mantine/core";
+import { Chip, Group, Stack } from "@mantine/core";
 import type { StreamSettings } from "../../../api/streaming";
+import { LabelWithInfo } from "../../../components/LabelWithInfo";
 
 type StreamSectionProps = {
   stream: Required<StreamSettings>;
@@ -8,25 +9,31 @@ type StreamSectionProps = {
 
 const ITEM_KINDS: { key: keyof StreamSettings; label: string }[] = [
   { key: "events", label: "Events" },
-  { key: "object_to_object", label: "Object-to-object updates" },
+  { key: "object_to_object", label: "O2O updates" },
   { key: "attribute_updates", label: "Attribute updates" },
 ];
 
+/** Which kinds of items the replayed stream contains. */
 export function StreamSection({ stream, onChange }: StreamSectionProps) {
   return (
-    <Checkbox.Group
-      label="Stream items"
-      description="Positions count every replayed item, which affects position-based heuristics."
-      value={ITEM_KINDS.filter(({ key }) => stream[key]).map(({ key }) => key)}
-      onChange={(selected) =>
-        onChange(Object.fromEntries(ITEM_KINDS.map(({ key }) => [key, selected.includes(key)])))
-      }
-    >
-      <Stack gap={6} mt="xs">
-        {ITEM_KINDS.map(({ key, label }) => (
-          <Checkbox key={key} value={key} label={label} />
-        ))}
-      </Stack>
-    </Checkbox.Group>
+    <Stack gap={6}>
+      <LabelWithInfo
+        label="Stream items"
+        info="The log is replayed as a stream of these item kinds, ordered by time. The algorithm's default is preselected. Ages and deadlines of heuristics count every replayed item, so adding item kinds changes them."
+      />
+      <Chip.Group
+        multiple
+        value={ITEM_KINDS.filter(({ key }) => stream[key]).map(({ key }) => key)}
+        onChange={(selected) => onChange(Object.fromEntries(ITEM_KINDS.map(({ key }) => [key, selected.includes(key)])))}
+      >
+        <Group gap={6}>
+          {ITEM_KINDS.map(({ key, label }) => (
+            <Chip key={key} value={key} size="xs">
+              {label}
+            </Chip>
+          ))}
+        </Group>
+      </Chip.Group>
+    </Stack>
   );
 }
