@@ -1,5 +1,6 @@
 """Eviction heuristics (definitions.tex: def:heuristic)."""
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
@@ -8,6 +9,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 if TYPE_CHECKING:
     from ocelescope_module_streaming.framework.algorithm import StreamingAlgorithm
     from ocelescope_module_streaming.framework.buffer import Entry
+    from ocelescope_module_streaming.stream import StreamItem
 
 
 class EvictionMode(StrEnum):
@@ -85,6 +87,14 @@ class Heuristic:
         """
         raise NotImplementedError(f"{type(self).__name__} does not support capacity mode")
 
+    def scores(self, candidates: Sequence[tuple[Any, "Entry[Any]"]], ctx: Context) -> Sequence[float]:
+        """Scores all eviction candidates at once; the highest score is evicted.
+
+        Override for scores that depend on the whole candidate set, e.g. min-max normalized
+        ranks. By default, each key is scored with `score`.
+        """
+        return [self.score(key, entry, ctx) for key, entry in candidates]
+
     def deadline(self, key: Any, entry: "Entry[Any]", ctx: Context) -> int | None:
         """Returns the position at which `key` should be evicted in expiry mode.
 
@@ -101,6 +111,12 @@ class Heuristic:
             The deadline position, or None if the key should never expire.
         """
         raise NotImplementedError(f"{type(self).__name__} does not support expiry mode")
+
+    def on_item(self, item: "StreamItem", ctx: Context) -> None:  # noqa: B027
+        """Updates the heuristic state with a stream item, before the algorithm processes it.
+
+        Does nothing by default.
+        """
 
     def on_write(self, key: Any, entry: "Entry[Any]", ctx: Context) -> None:  # noqa: B027
         """Updates the heuristic state after `key` was written. Does nothing by default.

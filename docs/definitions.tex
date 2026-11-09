@@ -111,13 +111,14 @@ An \emph{eviction heuristic} $H = (\Theta, \theta_0, \score, \dl, \hupd)$
 consists of
 \begin{itemize}
   \item a set of heuristic states $\Theta$ with initial state $\theta_0$;
-  \item a \emph{score} $\score(k, \sigma, \theta, i) \in \mathbb{R}$; a higher
-        score means ``evict sooner'';
+  \item a \emph{score} $\score(k, C, \sigma, \theta, i) \in \mathbb{R}$ of a
+        candidate $k$ among the candidate set $C$ (so that scores may be
+        normalized over $C$); a higher score means ``evict sooner'';
   \item a \emph{deadline} $\dl(k, \sigma, \theta, i) \in \mathbb{N} \cup \{\infty\}$,
         the position at which $k$ should be evicted;
-  \item a \emph{state update} $\hupd(\theta, k, \mathit{op}, \sigma, i) \in \Theta$
-        applied whenever its buffer writes or evicts $k$, with
-        $\mathit{op} \in \{\mathit{write}\} \cup \{\mathit{evict}(r) \mid r \in \{\Rcap, \Rexp, \Rdis\}\}$.
+  \item a \emph{state update} $\hupd(\theta, \mathit{op}, \sigma, i) \in \Theta$
+        applied for every item and whenever its buffer writes or evicts a key, with
+        $\mathit{op} \in \{\mathit{item}(s_i)\} \cup \{\mathit{write}(k)\} \cup \{\mathit{evict}(k, r) \mid r \in \{\Rcap, \Rexp, \Rdis\}\}$.
 \end{itemize}
 A heuristic need not define both $\score$ and $\dl$; it supports
 \emph{capacity mode} if it defines $\score$ and \emph{expiry mode} if it
@@ -150,9 +151,10 @@ Each buffer $B_j$ additionally keeps a schedule
 $d_j \colon \dom(b_j) \to \mathbb{N} \cup \{\infty\}$ (only if $H_j$ is in
 expiry mode). For each item $s_i$:
 \begin{enumerate}
-  \item \textbf{Update.} $\sigma \leftarrow \upd(\sigma, s_i)$. For every key
+  \item \textbf{Update.} $\theta_j \leftarrow \hupd_j(\theta_j, \mathit{item}(s_i), \sigma, i)$
+        for all $j$, then $\sigma \leftarrow \upd(\sigma, s_i)$. For every key
         $k$ written in $B_j$: update its bookkeeping,
-        $\theta_j \leftarrow \hupd_j(\theta_j, k, \mathit{write}, \sigma, i)$,
+        $\theta_j \leftarrow \hupd_j(\theta_j, \mathit{write}(k), \sigma, i)$,
         and, in expiry mode, $d_j(k) \leftarrow \dl_j(k, \sigma, \theta_j, i)$.
   \item \textbf{Evict} until no rule applies, buffers in order $j = 1, \dots, n$
         and repeated as long as some $\fin$ wrote to an earlier buffer.
@@ -166,15 +168,15 @@ expiry mode). For each item $s_i$:
                 otherwise evict $k$ with reason $\Rexp$.
           \item \emph{Capacity} (if $c_j < \infty$): while
                 $|\dom(b_j)| > c_j$ and $C_j \neq \emptyset$, evict
-                $k^* = \arg\max_{k \in C_j} \score_j(k, \sigma, \theta_j, i)$
+                $k^* = \arg\max_{k \in C_j} \score_j(k, C_j, \sigma, \theta_j, i)$
                 (ties: smallest $f(k)$) with reason $\Rcap$.
         \end{enumerate}
         \emph{Evicting} $k$ from $B_j$ with reason $r$ means: remove $k$ from
         $b_j$ and $d_j$, then
         $\sigma \leftarrow \fin(\sigma, j, k)$ and
-        $\theta_j \leftarrow \hupd_j(\theta_j, k, \mathit{evict}(r), \sigma, i)$.
+        $\theta_j \leftarrow \hupd_j(\theta_j, \mathit{evict}(k, r), \sigma, i)$.
         Keys written by $\fin$ are handled as in step~1 (bookkeeping, $\hupd$
-        with $\mathit{write}$, schedule) before $\hupd_j$ is applied.
+        with $\mathit{write}(k)$, schedule) before $\hupd_j$ is applied.
         An algorithm may also remove a key itself (reason $\Rdis$, e.g.\ from
         $\fin$); this calls $\hupd_j$ but not $\fin$.
 \end{enumerate}
@@ -407,5 +409,37 @@ Counting capacity evictions in the histogram has no effect while the object
 buffer is unbounded; it fixes the semantics for later heuristics that combine
 the lifecycle schedule with a fixed capacity.
 
-% TODO(WP6): LFU-DA, the eight priority features of Liss et al.,
-%   min-max normalized rank combination (weighted heuristic).
+For a candidate set $C$ and values $v \colon C \to \mathbb{R}$, let
+$\mathit{norm}_C(v)(k) = (v(k) - \min_C v) / (\max_C v - \min_C v)$, or $0$ if
+all values are equal.
+
+\begin{definition}[LFU-DA~\cite{Liss2025}]\label{def:lfuda}
+The state is a cache age $g \in \mathbb{N}$ and an insertion age $g(k)$ per
+buffered key. $\hupd$ sets $g(k) \leftarrow g$ on the first write of $k$, forgets
+$g(k)$ on eviction, and increments $g$ on every eviction with reason $\Rcap$
+(resetting all ages to $0$ when $g$ reaches a maximum).
+$\score(k, C) = -\bigl(\mathit{norm}_C(g)(k) + \mathit{norm}_C(n)(k)\bigr)$.
+Unlike~\cite{Liss2025}, where evictions precede the insertion, a key written by
+$s_i$ gets the cache age from before the evictions of step~$i$.
+\end{definition}
+
+\begin{definition}[Priority policy~\cite{Liss2025}]\label{def:priority}
+Given a capacity heuristic $H'$, an object-type feature $\phi \colon \Utype
+\rightharpoonup \mathbb{R}$ maintained in $\theta$ from the stream items, and an
+order $\in \{\min, \max\}$, let $\phi'(t) = \phi(t)$ for $\min$ and
+$\phi'(t) = 1/(\phi(t)+1)$ for time-based, $1/\phi(t)$ for count-based features
+for $\max$. With $r(k) = \mathit{norm}_C(-\score')(k)$ (0 = evicted first by $H'$)
+and $\tau(k)$ the object type of $k$ (its key, or the object in its value),
+\[
+  \score(k, C) = -\begin{cases}
+    r(k) + \mathit{norm}_{T}(\phi')(\tau(k)) & \tau(k) \in T\\
+    2\,r(k) & \text{otherwise,}
+  \end{cases}
+\]
+where $T$ are the types of the candidates for which $\phi$ is defined. The
+type features follow~\cite{Liss2025}: mean stride and mean lifespan of up to 5
+tracked objects per type (strides over a window of 10), mean objects per event
+of the type (window 10), distinct objects per type (reset at 1000), events per
+type (reset at $10^5$), and a custom order. Per-object features are not
+available since buffers mix object types.
+\end{definition}

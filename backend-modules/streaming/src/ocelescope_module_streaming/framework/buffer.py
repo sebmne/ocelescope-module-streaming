@@ -4,9 +4,12 @@ import heapq
 from collections.abc import Iterator
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
-from typing import Any, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from ocelescope_module_streaming.framework.heuristic import Context, EvictionMode, EvictionReason, Heuristic
+
+if TYPE_CHECKING:
+    from ocelescope_module_streaming.stream import StreamItem
 
 K = TypeVar("K")
 V = TypeVar("V")
@@ -188,10 +191,15 @@ class Buffer(Generic[K, V]):
 
     # Eviction, used by the run loop.
 
-    def start_step(self, ctx: Context) -> None:
-        """Begins the step for the item at `ctx.position` and clears the touched keys."""
+    def start_step(self, ctx: Context, item: "StreamItem | None" = None) -> None:
+        """Begins the step for the item at `ctx.position` and clears the touched keys.
+
+        If `item` is given, the heuristic observes it (`Heuristic.on_item`).
+        """
         self._ctx = ctx
         self._touched.clear()
+        if item is not None and self.heuristic is not None:
+            self.heuristic.on_item(item, ctx)
 
     def flush_writes(self) -> None:
         """Notifies the heuristic of the keys written since the last flush and schedules them.
@@ -226,15 +234,12 @@ class Buffer(Generic[K, V]):
             touched in the current step.
         """
         assert self.heuristic is not None and self._ctx is not None, "only bounded buffers evict"
-        best: K | None = None
-        best_score = float("-inf")
-        for key, entry in self._entries.items():
-            if key in self._touched:
-                continue
-            score = self.heuristic.score(key, entry, self._ctx)
-            if best is None or score > best_score:
-                best, best_score = key, score
-        return best
+        candidates = [(key, entry) for key, entry in self._entries.items() if key not in self._touched]
+        if not candidates:
+            return None
+        scores = self.heuristic.scores(candidates, self._ctx)
+        best = max(range(len(candidates)), key=lambda index: (scores[index], -index))
+        return candidates[best][0]
 
     def expired(self) -> K | None:
         """Selects the next key to evict for expiry.

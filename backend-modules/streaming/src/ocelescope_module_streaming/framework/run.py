@@ -72,7 +72,7 @@ def run(algorithm: StreamingAlgorithm[M], stream: Iterable[StreamItem], observer
     for position, item in enumerate(stream, start=1):
         ctx = Context(algorithm, position, item.t)
         for buffer in buffers:
-            buffer.start_step(ctx)
+            buffer.start_step(ctx, item)
         algorithm.update(item, position)
         for buffer in buffers:
             buffer.flush_writes()
