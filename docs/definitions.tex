@@ -421,6 +421,13 @@ Stateless heuristics, using the bookkeeping of Def.~\ref{def:buffer}
   \text{LFU: } & \score(k) = -n(k) \\
   \text{Random: } & \score(k) \sim U(0,1) \text{ (seeded)}
 \end{align*}
+Ties in the capacity rule of Def.~\ref{def:run} are broken by insertion order
+in general. FIFO, LIFO and LRU are instead evicted as the first untouched key
+in an order the buffer maintains (as in~\cite{Liss2025}): insertion order
+(FIFO), reverse insertion order (LIFO), and write order, where every write
+moves the key to the end (LRU). These orders agree with the scores above and
+break ties by write order; the eviction takes amortized constant time instead
+of a pass over all keys.
 Max age (expiry mode), with age limit $T$: $\dl(k) = l(k) + T$.
 
 \begin{definition}[Lifecycle heuristic~\cite{Muehlmeyer2026}]\label{def:lifecycle}

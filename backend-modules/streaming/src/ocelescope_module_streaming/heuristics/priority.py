@@ -281,12 +281,12 @@ class Priority(Heuristic):
             raise ValueError(f"{spec.label} cannot be combined with a priority policy")
         self.cache = spec.factory(spec.params.model_validate(cache_params or {}))
         self.feature = make_feature(feature, custom_order)
-        self.order: Order = order
+        self.direction: Order = order
 
     def scores(self, candidates: Sequence[tuple[Any, Entry[Any]]], ctx: Context) -> list[float]:
         cache_ranks = normalize([-score for score in self.cache.scores(candidates, ctx)])
         owners = [owner_pair(entry) or (owner_type(key, entry),) for key, entry in candidates]
-        values = self.feature.values(self.order)
+        values = self.feature.values(self.direction)
         present = {t: values[t] for types in owners for t in types if t is not None and t in values}
         priorities = normalize_map(present)
         return [-_combine(rank, types, priorities) for rank, types in zip(cache_ranks, owners, strict=True)]

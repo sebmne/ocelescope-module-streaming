@@ -26,6 +26,20 @@ class EvictionMode(StrEnum):
     BOTH = "both"
 
 
+class EvictionOrder(StrEnum):
+    """An order of buffered keys that a buffer maintains for constant-time eviction.
+
+    Attributes:
+        OLDEST_FIRST: Insertion order; rewriting a key keeps its place.
+        NEWEST_FIRST: Reverse insertion order.
+        LEAST_RECENT_FIRST: Write order; rewriting a key moves it to the end.
+    """
+
+    OLDEST_FIRST = "oldest_first"
+    NEWEST_FIRST = "newest_first"
+    LEAST_RECENT_FIRST = "least_recent_first"
+
+
 class EvictionReason(StrEnum):
     """Why a key left a buffer.
 
@@ -68,6 +82,11 @@ class Heuristic:
 
     modes: ClassVar[frozenset[EvictionMode]] = frozenset({EvictionMode.CAPACITY})
     """The supported modes among CAPACITY and EXPIRY; BOTH is supported if both are."""
+
+    order: ClassVar[EvictionOrder | None] = None
+    """If set, capacity eviction takes the first untouched key in this order instead of scoring
+    all keys, as in the reference implementation of Liss et al. It must rank keys like `score`;
+    ties are broken by the order."""
 
     @classmethod
     def supported_modes(cls) -> tuple[EvictionMode, ...]:

@@ -6,7 +6,13 @@ from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
-from ocelescope_module_streaming.framework.heuristic import Context, EvictionMode, EvictionReason, Heuristic
+from ocelescope_module_streaming.framework.heuristic import (
+    Context,
+    EvictionMode,
+    EvictionOrder,
+    EvictionReason,
+    Heuristic,
+)
 
 if TYPE_CHECKING:
     from ocelescope_module_streaming.stream import StreamItem
@@ -115,6 +121,9 @@ class Buffer(Generic[K, V]):
         self._written: dict[K, None] = {}  # written since the last flush, in write order
         self._ctx: Context | None = None
         self._next_key = 0
+        self._order = self.heuristic.order if self.heuristic is not None else None
+        # Keys in write order, only kept for LEAST_RECENT_FIRST.
+        self._recency: dict[K, None] = {}
         # Expiry schedule: key -> sequence number of its live heap item, and a heap of
         # (deadline, first write, sequence number, key). Items with an outdated sequence
         # number are stale and skipped.
@@ -141,6 +150,9 @@ class Buffer(Generic[K, V]):
             self._entries[key] = Entry(value, position, position, 1)
         else:
             entry.value, entry.last, entry.freq = value, position, entry.freq + 1
+        if self._order is EvictionOrder.LEAST_RECENT_FIRST:
+            self._recency.pop(key, None)
+            self._recency[key] = None
         self._touched.add(key)
         self._written[key] = None
 
@@ -234,6 +246,8 @@ class Buffer(Generic[K, V]):
             touched in the current step.
         """
         assert self.heuristic is not None and self._ctx is not None, "only bounded buffers evict"
+        if self._order is not None:
+            return self._first_untouched()
         candidates = [(key, entry) for key, entry in self._entries.items() if key not in self._touched]
         if not candidates:
             return None
@@ -294,6 +308,21 @@ class Buffer(Generic[K, V]):
 
     # Internals.
 
+    def _first_untouched(self) -> K | None:
+        """The first key in the heuristic's order that was not touched in this step."""
+        keys: Any
+        match self._order:
+            case EvictionOrder.OLDEST_FIRST:
+                keys = self._entries
+            case EvictionOrder.NEWEST_FIRST:
+                keys = reversed(self._entries)
+            case _:
+                keys = self._recency
+        for key in keys:
+            if key not in self._touched:
+                return key
+        return None
+
     @property
     def _expires(self) -> bool:
         return self.mode in (EvictionMode.EXPIRY, EvictionMode.BOTH)
@@ -312,4 +341,5 @@ class Buffer(Generic[K, V]):
             self._touched.discard(key)
             self._written.pop(key, None)
             self._scheduled.pop(key, None)
+            self._recency.pop(key, None)
         return entry

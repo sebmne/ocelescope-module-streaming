@@ -8,7 +8,13 @@ way. The formal definitions are in docs/definitions.tex.
 
 from ocelescope_module_streaming.framework.algorithm import StreamingAlgorithm
 from ocelescope_module_streaming.framework.buffer import Buffer, BufferConfig, Entry
-from ocelescope_module_streaming.framework.heuristic import Context, EvictionMode, EvictionReason, Heuristic
+from ocelescope_module_streaming.framework.heuristic import (
+    Context,
+    EvictionMode,
+    EvictionOrder,
+    EvictionReason,
+    Heuristic,
+)
 from ocelescope_module_streaming.framework.run import Observer, run
 
 __all__ = [
@@ -17,6 +23,7 @@ __all__ = [
     "Context",
     "Entry",
     "EvictionMode",
+    "EvictionOrder",
     "EvictionReason",
     "Heuristic",
     "Observer",
