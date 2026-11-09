@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from ocelescope_module_streaming.catalog import AlgorithmSpec, HeuristicSpec
 from ocelescope_module_streaming.framework import EvictionMode
-from ocelescope_module_streaming.runs import StreamSettings
+from ocelescope_module_streaming.runs import Preset, StreamSettings
 
 
 class BufferInfo(BaseModel):
@@ -60,7 +60,8 @@ class AlgorithmInfo(BaseModel):
 
 
 class Catalog(BaseModel):
-    """All available algorithms and heuristics."""
+    """All available algorithms, heuristics and presets."""
 
     algorithms: list[AlgorithmInfo]
     heuristics: list[HeuristicInfo]
+    presets: list[Preset]
