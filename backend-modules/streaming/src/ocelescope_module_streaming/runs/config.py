@@ -4,6 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from ocelescope_module_streaming.framework import EvictionMode
 from ocelescope_module_streaming.stream import StreamOptions
 
 
@@ -33,12 +34,16 @@ class StreamSettings(BaseModel):
 
 
 class BufferSetting(BaseModel):
-    """Capacity and heuristic of one buffer.
+    """Eviction settings of one buffer.
+
+    Without a heuristic, the buffer never evicts. With a heuristic, the mode defaults to
+    capacity if a capacity is set and to expiry otherwise.
 
     Attributes:
-        capacity: The maximum number of entries, or None for an unbounded buffer.
+        capacity: The maximum number of entries, or None for no size limit.
         heuristic: The key of the eviction heuristic. Required if `capacity` is set.
         heuristic_params: Parameters of the heuristic, validated against its schema.
+        mode: The eviction mode, or None to derive it.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -46,6 +51,7 @@ class BufferSetting(BaseModel):
     capacity: int | None = Field(default=None, ge=0)
     heuristic: str | None = None
     heuristic_params: dict[str, Any] = Field(default_factory=dict)
+    mode: EvictionMode | None = None
 
 
 class RunConfig(BaseModel):

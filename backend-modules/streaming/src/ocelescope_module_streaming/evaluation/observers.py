@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from ocelescope_module_streaming.framework import Buffer, Observer, StreamingAlgorithm
+from ocelescope_module_streaming.framework import Buffer, EvictionMode, EvictionReason, Observer, StreamingAlgorithm
 from ocelescope_module_streaming.stream import StreamItem
 
 
@@ -39,20 +39,25 @@ class BufferStatistics(BaseModel):
     """Behavior of one buffer over a run.
 
     Attributes:
-        capacity: The capacity of the buffer, or None if unbounded.
+        capacity: The capacity of the buffer, or None if it has no size limit.
+        mode: The eviction mode, or None if the buffer never evicts.
         peak_size: The largest number of entries after any item.
         mean_size: The average number of entries after each item.
         final_size: The number of entries after the last item.
-        evictions: The number of evicted keys.
+        evictions: The number of evicted keys (capacity and expired).
+        evictions_by_reason: The number of removed keys per reason, including keys the
+            algorithm discarded itself.
         premature_evictions: The number of evicted keys that were written again later, i.e.
             evicted too early.
     """
 
     capacity: int | None
+    mode: EvictionMode | None
     peak_size: int
     mean_size: float
     final_size: int
     evictions: int
+    evictions_by_reason: dict[EvictionReason, int]
     premature_evictions: int
 
 
@@ -69,7 +74,9 @@ class BufferMonitor(Observer):
         self._total: dict[str, int] = {}
         self._final: dict[str, int] = {}
         self._capacity: dict[str, int | None] = {}
-        self._evictions: dict[str, int] = {}
+        self._mode: dict[str, EvictionMode | None] = {}
+        self._discarded: dict[str, int] = {}
+        self._evictions: dict[str, dict[EvictionReason, int]] = {}
         self._premature: dict[str, int] = {}
         self._evicted: dict[str, set[Any]] = {}
 
@@ -78,8 +85,9 @@ class BufferMonitor(Observer):
         """The number of processed items."""
         return self._items
 
-    def on_evict(self, position: int, buffer: Buffer[Any, Any], key: Any, value: Any) -> None:
-        self._evictions[buffer.name] = self._evictions.get(buffer.name, 0) + 1
+    def on_evict(self, position: int, buffer: Buffer[Any, Any], key: Any, value: Any, reason: EvictionReason) -> None:
+        counts = self._evictions.setdefault(buffer.name, {})
+        counts[reason] = counts.get(reason, 0) + 1
         self._evicted.setdefault(buffer.name, set()).add(key)
 
     def on_item(self, position: int, item: StreamItem, algorithm: StreamingAlgorithm[Any]) -> None:
@@ -87,6 +95,8 @@ class BufferMonitor(Observer):
         for buffer in algorithm.buffers:
             name, size = buffer.name, len(buffer)
             self._capacity[name] = buffer.capacity
+            self._mode[name] = buffer.mode
+            self._discarded[name] = buffer.discarded
             self._peak[name] = max(self._peak.get(name, 0), size)
             self._total[name] = self._total.get(name, 0) + size
             self._final[name] = size
@@ -102,10 +112,15 @@ class BufferMonitor(Observer):
         return {
             name: BufferStatistics(
                 capacity=self._capacity[name],
+                mode=self._mode[name],
                 peak_size=self._peak[name],
                 mean_size=self._total[name] / self._items if self._items else 0.0,
                 final_size=self._final[name],
-                evictions=self._evictions.get(name, 0),
+                evictions=sum(self._evictions.get(name, {}).values()),
+                evictions_by_reason={
+                    **self._evictions.get(name, {}),
+                    **({EvictionReason.DISCARDED: self._discarded[name]} if self._discarded[name] else {}),
+                },
                 premature_evictions=self._premature.get(name, 0),
             )
             for name in self._peak

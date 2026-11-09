@@ -1,47 +1,39 @@
 """Classic cache replacement policies.
 
-They only use the bookkeeping every buffer keeps (first write, last write, write count).
+They only use the bookkeeping every buffer keeps (first write, last write, write count) and
+support capacity mode (definitions.tex: sec:heuristics).
 """
 
 import random
-from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from ocelescope_module_streaming.catalog import register_heuristic
-from ocelescope_module_streaming.framework import Entry, Heuristic, StreamingAlgorithm
+from ocelescope_module_streaming.framework import Context, Entry, Heuristic
 
 
 @register_heuristic(key="fifo", label="FIFO", description="Evicts the key that entered the buffer first.")
 class FIFO(Heuristic):
-    def score(
-        self, key: Any, entry: Entry[Any], algorithm: StreamingAlgorithm[Any], position: int, timestamp: datetime
-    ) -> float:
-        return position - entry.first
+    def score(self, key: Any, entry: Entry[Any], ctx: Context) -> float:
+        return ctx.position - entry.first
 
 
 @register_heuristic(key="lifo", label="LIFO", description="Evicts the key that entered the buffer last.")
 class LIFO(Heuristic):
-    def score(
-        self, key: Any, entry: Entry[Any], algorithm: StreamingAlgorithm[Any], position: int, timestamp: datetime
-    ) -> float:
+    def score(self, key: Any, entry: Entry[Any], ctx: Context) -> float:
         return entry.first
 
 
 @register_heuristic(key="lru", label="LRU", description="Evicts the least recently written key.")
 class LRU(Heuristic):
-    def score(
-        self, key: Any, entry: Entry[Any], algorithm: StreamingAlgorithm[Any], position: int, timestamp: datetime
-    ) -> float:
-        return position - entry.last
+    def score(self, key: Any, entry: Entry[Any], ctx: Context) -> float:
+        return ctx.position - entry.last
 
 
 @register_heuristic(key="lfu", label="LFU", description="Evicts the least frequently written key.")
 class LFU(Heuristic):
-    def score(
-        self, key: Any, entry: Entry[Any], algorithm: StreamingAlgorithm[Any], position: int, timestamp: datetime
-    ) -> float:
+    def score(self, key: Any, entry: Entry[Any], ctx: Context) -> float:
         return -entry.freq
 
 
@@ -64,7 +56,5 @@ class RandomReplacement(Heuristic):
     def __init__(self, seed: int = 0) -> None:
         self._random = random.Random(seed)
 
-    def score(
-        self, key: Any, entry: Entry[Any], algorithm: StreamingAlgorithm[Any], position: int, timestamp: datetime
-    ) -> float:
+    def score(self, key: Any, entry: Entry[Any], ctx: Context) -> float:
         return self._random.random()

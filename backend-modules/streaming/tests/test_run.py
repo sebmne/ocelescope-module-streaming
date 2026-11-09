@@ -3,7 +3,14 @@ from typing import Any
 
 from support import event, stream_of
 
-from ocelescope_module_streaming.framework import Buffer, BufferConfig, Observer, StreamingAlgorithm, run
+from ocelescope_module_streaming.framework import (
+    Buffer,
+    BufferConfig,
+    EvictionReason,
+    Observer,
+    StreamingAlgorithm,
+    run,
+)
 from ocelescope_module_streaming.heuristics import FIFO
 from ocelescope_module_streaming.stream import Event, StreamItem
 
@@ -42,7 +49,7 @@ class Evictions(Observer):
         self.evicted: list[tuple[int, str, Any]] = []
         self.items = 0
 
-    def on_evict(self, position: int, buffer: Buffer[Any, Any], key: Any, value: Any) -> None:
+    def on_evict(self, position: int, buffer: Buffer[Any, Any], key: Any, value: Any, reason: EvictionReason) -> None:
         self.evicted.append((position, buffer.name, key))
 
     def on_item(self, position: int, item: StreamItem, algorithm: StreamingAlgorithm[Any]) -> None:

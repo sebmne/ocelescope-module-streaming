@@ -5,6 +5,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from ocelescope_module_streaming.catalog import AlgorithmSpec, HeuristicSpec
+from ocelescope_module_streaming.framework import EvictionMode
 from ocelescope_module_streaming.runs import StreamSettings
 
 
@@ -17,11 +18,12 @@ class BufferInfo(BaseModel):
 
 
 class HeuristicInfo(BaseModel):
-    """An eviction heuristic and the JSON schema of its parameters."""
+    """An eviction heuristic, the eviction modes it supports and the JSON schema of its parameters."""
 
     key: str
     label: str
     description: str
+    modes: list[EvictionMode]
     params_schema: dict[str, Any]
 
     @classmethod
@@ -30,6 +32,7 @@ class HeuristicInfo(BaseModel):
             key=spec.key,
             label=spec.label,
             description=spec.description,
+            modes=list(spec.modes),
             params_schema=spec.params.model_json_schema(),
         )
 

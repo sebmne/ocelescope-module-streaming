@@ -109,6 +109,7 @@ def register_heuristic(
                 label=label,
                 description=description,
                 params=params,
+                modes=cls.supported_modes(),
                 factory=lambda values: cls(**values.model_dump()),
             )
         )

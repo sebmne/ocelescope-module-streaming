@@ -43,7 +43,8 @@ export function RunForm({ catalog, ocelId, onStarted }: RunFormProps) {
           <StreamSection stream={state.stream} onChange={(stream) => dispatch({ type: "setStream", stream })} />
           <BufferList
             buffers={algorithm.buffers}
-            heuristics={catalog.heuristics}
+            // The form only offers fixed-capacity buffers so far; expiry modes follow with presets.
+            heuristics={catalog.heuristics.filter((heuristic) => heuristic.modes.includes("capacity"))}
             values={state.buffers}
             onChange={(buffer, patch) => dispatch({ type: "updateBuffer", buffer, patch })}
           />

@@ -9,7 +9,9 @@ Example:
 
 from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
+from typing import Any, cast
 
+from ocelescope_module_streaming.framework import Buffer, Context, StreamingAlgorithm
 from ocelescope_module_streaming.stream import (
     AttributeUpdate,
     AttributeValue,
@@ -51,3 +53,8 @@ def attr(target: ObjectRef, attribute: str, value: AttributeValue | None) -> Att
 def stream_of(*contents: Content, step: timedelta = timedelta(days=1)) -> list[StreamItem]:
     """Returns a stream of `contents` with timestamps `START`, `START + step`, ..."""
     return [StreamItem(content, START + index * step) for index, content in enumerate(contents)]
+
+
+def step(buffer: Buffer[Any, Any], position: int, algorithm: StreamingAlgorithm[Any] | None = None) -> None:
+    """Starts the step for `position` on `buffer`, outside of a run."""
+    buffer.start_step(Context(cast(StreamingAlgorithm[Any], algorithm), position, START))

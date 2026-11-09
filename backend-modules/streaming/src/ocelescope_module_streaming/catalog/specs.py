@@ -7,7 +7,7 @@ from typing import Any
 from ocelescope import OCEL
 from pydantic import BaseModel, ConfigDict
 
-from ocelescope_module_streaming.framework import BufferConfig, Heuristic, StreamingAlgorithm
+from ocelescope_module_streaming.framework import BufferConfig, EvictionMode, Heuristic, StreamingAlgorithm
 from ocelescope_module_streaming.stream import StreamOptions
 
 
@@ -41,6 +41,7 @@ class HeuristicSpec:
         label: A human-readable name.
         description: How the heuristic scores keys.
         params: The pydantic model of the heuristic's parameters.
+        modes: The eviction modes a buffer using the heuristic may be configured with.
         factory: Creates a heuristic from validated parameters.
     """
 
@@ -48,6 +49,7 @@ class HeuristicSpec:
     label: str
     description: str
     params: type[BaseModel]
+    modes: tuple[EvictionMode, ...]
     factory: Callable[[BaseModel], Heuristic]
 
 

@@ -173,6 +173,8 @@ expiry mode). For each item $s_i$:
         $b_j$ and $d_j$, then
         $\sigma \leftarrow \fin(\sigma, j, k)$ and
         $\theta_j \leftarrow \hupd_j(\theta_j, k, \mathit{evict}(r), \sigma, i)$.
+        Keys written by $\fin$ are handled as in step~1 (bookkeeping, $\hupd$
+        with $\mathit{write}$, schedule) before $\hupd_j$ is applied.
         An algorithm may also remove a key itself (reason $\Rdis$, e.g.\ from
         $\fin$); this calls $\hupd_j$ but not $\fin$.
 \end{enumerate}
