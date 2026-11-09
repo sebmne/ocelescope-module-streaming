@@ -1,7 +1,7 @@
-import { Group, NumberInput, Paper, Select, Stack, Switch, Text, Tooltip } from "@mantine/core";
+import { Group, NumberInput, Paper, Select, Stack, Text } from "@mantine/core";
 import type { BufferInfo, HeuristicInfo } from "../../../api/streaming";
 import { SchemaForm } from "../../../components/SchemaForm";
-import type { BufferFormState } from "../model";
+import { BUFFER_MODES, type BufferFormState, type BufferMode, hasCapacity, heuristicsFor } from "../model";
 
 type BufferListProps = {
   buffers: BufferInfo[];
@@ -18,7 +18,8 @@ export function BufferList({ buffers, heuristics, values, onChange }: BufferList
           Buffers
         </Text>
         <Text size="xs" c="dimmed">
-          Bound a buffer to limit its memory. When it is full, the heuristic decides which entry to evict.
+          Everything the algorithm remembers is stored in buffers. Choose per buffer whether and how its entries are
+          evicted.
         </Text>
       </div>
       {buffers.map((buffer) => (
@@ -42,50 +43,57 @@ type BufferCardProps = {
 };
 
 function BufferCard({ buffer, heuristics, value, onChange }: BufferCardProps) {
-  const heuristic = heuristics.find((candidate) => candidate.key === value.heuristic);
+  const candidates = heuristicsFor(heuristics, value.mode);
+  const heuristic = candidates.find((candidate) => candidate.key === value.heuristic);
+  const availableModes = BUFFER_MODES.filter(
+    (mode) => mode.value === "unbounded" || heuristicsFor(heuristics, mode.value).length > 0,
+  );
 
-  const setBounded = (bounded: boolean) =>
-    onChange(bounded && value.heuristic === null ? { bounded, heuristic: heuristics[0]?.key ?? null } : { bounded });
+  const setMode = (mode: BufferMode) => {
+    const keep = heuristicsFor(heuristics, mode).some((candidate) => candidate.key === value.heuristic);
+    const first = heuristicsFor(heuristics, mode)[0]?.key ?? null;
+    onChange(keep ? { mode } : { mode, heuristic: first, heuristicParams: {} });
+  };
 
   return (
     <Paper withBorder p="sm" radius="sm">
       <Stack gap="xs">
         <div>
-          <Group justify="space-between" wrap="nowrap">
-            <Text size="sm" fw={500}>
-              {buffer.label}
-            </Text>
-            <Tooltip label={value.bounded ? "Bounded" : "Unbounded"}>
-              <Switch
-                aria-label={`Bound ${buffer.label}`}
-                size="xs"
-                checked={value.bounded}
-                onChange={(event) => setBounded(event.currentTarget.checked)}
-              />
-            </Tooltip>
-          </Group>
+          <Text size="sm" fw={500}>
+            {buffer.label}
+          </Text>
           <Text size="xs" c="dimmed">
             {buffer.description}
           </Text>
         </div>
-        {value.bounded && (
+        <Select
+          label="Eviction"
+          size="xs"
+          data={availableModes.map((mode) => ({ value: mode.value, label: mode.label }))}
+          value={value.mode}
+          allowDeselect={false}
+          onChange={(mode) => mode && setMode(mode as BufferMode)}
+        />
+        {value.mode !== "unbounded" && (
           <>
             <Group grow gap="xs" align="flex-start">
-              <NumberInput
-                label="Capacity"
-                size="xs"
-                value={value.capacity}
-                min={0}
-                step={100}
-                allowDecimal={false}
-                thousandSeparator=" "
-                onChange={(capacity) => typeof capacity === "number" && onChange({ capacity })}
-              />
+              {hasCapacity(value.mode) && (
+                <NumberInput
+                  label="Capacity"
+                  size="xs"
+                  value={value.capacity}
+                  min={0}
+                  step={100}
+                  allowDecimal={false}
+                  thousandSeparator=" "
+                  onChange={(capacity) => typeof capacity === "number" && onChange({ capacity })}
+                />
+              )}
               <Select
                 label="Heuristic"
                 size="xs"
-                data={heuristics.map((candidate) => ({ value: candidate.key, label: candidate.label }))}
-                value={value.heuristic}
+                data={candidates.map((candidate) => ({ value: candidate.key, label: candidate.label }))}
+                value={heuristic ? heuristic.key : null}
                 allowDeselect={false}
                 onChange={(key) => onChange({ heuristic: key, heuristicParams: {} })}
               />

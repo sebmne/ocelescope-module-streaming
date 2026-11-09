@@ -9,6 +9,6 @@ import { initialRunForm, runFormReducer, validateRunForm } from "../model";
 export function useRunForm(catalog: Catalog) {
   const [state, dispatch] = useReducer(runFormReducer, catalog.algorithms[0], initialRunForm);
   const algorithm = catalog.algorithms.find((candidate) => candidate.key === state.algorithm);
-  const errors = useMemo(() => validateRunForm(state), [state]);
+  const errors = useMemo(() => validateRunForm(state, catalog.heuristics), [state, catalog.heuristics]);
   return { state, dispatch, algorithm, errors };
 }

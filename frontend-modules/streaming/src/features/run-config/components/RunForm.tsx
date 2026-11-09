@@ -6,6 +6,7 @@ import { useRunForm } from "../hooks/useRunForm";
 import { toRunConfig } from "../model";
 import { AlgorithmSection } from "./AlgorithmSection";
 import { BufferList } from "./BufferList";
+import { PresetSection } from "./PresetSection";
 import { StreamSection } from "./StreamSection";
 
 type RunFormProps = {
@@ -33,6 +34,12 @@ export function RunForm({ catalog, ocelId, onStarted }: RunFormProps) {
     <Stack gap={0} h="100%">
       <ScrollArea flex={1} mih={0} offsetScrollbars>
         <Stack gap="md" px="md" py="xs">
+          <PresetSection
+            presets={catalog.presets}
+            algorithms={catalog.algorithms}
+            selected={state.preset}
+            onApply={(preset, algorithm) => dispatch({ type: "applyPreset", preset, algorithm })}
+          />
           <AlgorithmSection
             algorithms={catalog.algorithms}
             selected={algorithm}
@@ -43,8 +50,7 @@ export function RunForm({ catalog, ocelId, onStarted }: RunFormProps) {
           <StreamSection stream={state.stream} onChange={(stream) => dispatch({ type: "setStream", stream })} />
           <BufferList
             buffers={algorithm.buffers}
-            // The form only offers fixed-capacity buffers so far; expiry modes follow with presets.
-            heuristics={catalog.heuristics.filter((heuristic) => heuristic.modes.includes("capacity"))}
+            heuristics={catalog.heuristics}
             values={state.buffers}
             onChange={(buffer, patch) => dispatch({ type: "updateBuffer", buffer, patch })}
           />
