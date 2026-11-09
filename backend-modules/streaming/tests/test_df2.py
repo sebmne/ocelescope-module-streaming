@@ -77,3 +77,20 @@ def test_discards_are_counted(surgery_stream: list[StreamItem]) -> None:
     run(miner, surgery_stream)
     # The entries for {D1} and {D2} are discarded once (surgery, doctor) diverges.
     assert miner.divergence.index.discarded == 2
+
+
+def test_typed_arcs_mark_suppressed_elements(surgery_stream: list[StreamItem]) -> None:
+    graph = run(StreamingDF2(NoParams()), surgery_stream)
+    arcs = {(arc.source, arc.target, arc.object_type): arc for arc in graph.typed_arcs}
+    assert arcs[("surgery", "surgery", "doctor")].suppressed  # doctor diverges on surgery
+    assert arcs[(None, "surgery", "doctor")].suppressed
+    assert not arcs[(None, "surgery", "patient")].suppressed
+    assert graph.object_types == ["doctor", "patient"]
+
+
+def test_visualization_draws_the_oc_dfg_with_suppressed_arcs_dashed(surgery_stream: list[StreamItem]) -> None:
+    graph = run(StreamingDF2(NoParams()), surgery_stream).visualize()
+    dashed = [edge for edge in graph.edges if edge.style.dashed]
+    assert len(graph.edges) == 5 and len(dashed) == 3  # doctor: arc, start, end
+    assert {node.id for node in graph.nodes} >= {"surgery", "start_doctor", "end_patient"}
+    assert any("div: doctor" in (node.label or "") for node in graph.nodes)

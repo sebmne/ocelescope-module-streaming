@@ -3,7 +3,7 @@
 from ocelescope import Resource
 
 from ocelescope_module_streaming.models.cut_miner import CutMiner, DF2InductiveMiner
-from ocelescope_module_streaming.models.df2 import DF2Divergence, DF2Edge, DF2Graph, build_df2
+from ocelescope_module_streaming.models.df2 import DF2Divergence, DF2Edge, DF2Graph, DF2TypedArc, build_df2
 from ocelescope_module_streaming.models.ocdfg import build_ocdfg
 from ocelescope_module_streaming.models.process_tree import OCPT, ProcessTreeNode, annotate
 from ocelescope_module_streaming.models.totem import Totem, TotemEdge, build_totem
@@ -19,6 +19,7 @@ __all__ = [
     "DF2Edge",
     "DF2Graph",
     "DF2InductiveMiner",
+    "DF2TypedArc",
     "ProcessTreeNode",
     "Totem",
     "TotemEdge",

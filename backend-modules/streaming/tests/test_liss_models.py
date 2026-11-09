@@ -126,3 +126,12 @@ def test_liss_presets_run(order_stream: list[StreamItem]) -> None:
         prepared = prepare_run(preset.to_run_config("log"))
         assert all(b.capacity == 1000 for b in prepared.algorithm.buffers)
         run(prepared.algorithm, order_stream)
+
+
+def test_totem_visualization_annotates_both_ends(order_stream: list[StreamItem]) -> None:
+    graph = run(LissTotem(TotemParams()), order_stream).visualize()
+    edges = {(edge.source, edge.target): edge for edge in graph.edges}
+    assert ("order", "item") not in edges  # one line per pair, sorted
+    item_order = edges[("item", "order")]
+    assert item_order.start_label == "□ 1..* (0..*)"  # order towards item, shown at the item end
+    assert item_order.end_label == "■ 1 (1)"  # item towards order, shown at the order end

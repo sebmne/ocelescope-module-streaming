@@ -43,6 +43,19 @@ plots appear under the metrics; a dashed grey line marks a buffer's capacity.
 From Python, pass `evaluation.BufferSampler(expected_items)` as an observer
 and call `sampler.finish(last_position, algorithm)` after the run.
 
+How models are drawn:
+
+- **OCPT**: a process tree; leaves list their object types with `con`,
+  `div` and `def` markers, and a `no cut` node marks activity sets no cut
+  applies to.
+- **DF2 graph**: the underlying OC-DFG, one color per object type. Arcs, start
+  and end activities that the DF2 graph suppresses because of divergence are
+  dashed and grey; activities name the types they diverge for.
+- **TOTeM**: as in Liss et al., one line per pair of connected object types.
+  Each end shows the relation towards that end's type: the temporal relation
+  (■ during, □ during inverse, ▶ precedes, ▷ precedes inverse, || parallel),
+  the log cardinality and, in brackets, the event cardinality.
+
 Both models are also added to the session's resources.
 
 ## From Python

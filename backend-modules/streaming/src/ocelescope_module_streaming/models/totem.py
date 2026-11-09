@@ -4,7 +4,9 @@ from collections.abc import Iterable, Mapping
 from typing import Literal
 
 from ocelescope import Resource
-from ocelescope.visualization.default.graph import DIRECTED_ELK_GRAPH_LAYOUT, Graph, GraphEdge, GraphNode
+from ocelescope.visualization.default.graph import Graph, GraphEdge, GraphNode
+from ocelescope.visualization.default.graph.layouting import GraphvizLayoutConfig
+from ocelescope.visualization.util.color import generate_color_map
 from pydantic import BaseModel, Field
 
 from ocelescope_module_streaming.blocks.observations import (
@@ -64,20 +66,55 @@ class Totem(Resource):
     tau: float = 1.0
 
     def visualize(self) -> Graph:
+        """Draws the model as in Liss et al.: one line per pair of connected object types.
+
+        Each end of a line describes the relation from the type at the other end towards it: the
+        temporal relation as a symbol (■ during, □ during inverse, ▶ precedes, ▷ precedes inverse,
+        || parallel), then the log cardinality and the event cardinality in brackets.
+        """
+        colors = generate_color_map(self.object_types)
         nodes = [
-            GraphNode(id=t, label=t, shape="rectangle", width=140, height=40, color="#ffffff")
-            for t in self.object_types
+            GraphNode(
+                id=object_type,
+                label=object_type,
+                shape="rectangle",
+                width=max(110, 9 * len(object_type) + 30),
+                height=40,
+                color=colors[object_type],
+                border_color="#000000",
+            )
+            for object_type in self.object_types
         ]
+        relations = {(edge.source, edge.target): edge for edge in self.edges}
         edges = [
             GraphEdge(
-                source=edge.source,
-                target=edge.target,
-                end_arrow="triangle",
-                label=f"{edge.temporal or '–'}: {edge.log_cardinality or '–'} ({edge.event_cardinality or '–'})",
+                source=a,
+                target=b,
+                start_label=_end_label(relations.get((b, a))),
+                end_label=_end_label(relations.get((a, b))),
             )
-            for edge in self.edges
+            for a, b in sorted({tuple(sorted((e.source, e.target))) for e in self.edges})
         ]
-        return Graph(nodes=nodes, edges=edges, layout_config=DIRECTED_ELK_GRAPH_LAYOUT)
+        return Graph(nodes=nodes, edges=edges, layout_config=TOTEM_LAYOUT)
+
+
+TOTEM_LAYOUT = GraphvizLayoutConfig(
+    engine="dot",
+    graphAttrs={"rankdir": "LR", "nodesep": 0.9, "ranksep": 2.2, "splines": "spline"},
+)
+"""A spacious left-to-right layout, leaving room for the labels at both ends of every line."""
+
+TEMPORAL_SYMBOLS = {"during": "■", "during_inv": "□", "precedes": "▶", "precedes_inv": "▷", "parallel": "||"}
+"""The symbols of the temporal relations in TOTeM diagrams."""
+
+
+def _end_label(edge: TotemEdge | None) -> str | None:
+    """The annotation at the target end of `edge`: symbol, log cardinality, (event cardinality)."""
+    if edge is None:
+        return None
+    symbol = TEMPORAL_SYMBOLS.get(edge.temporal or "", "")
+    cardinality = edge.log_cardinality or "–"
+    return f"{symbol} {cardinality} ({edge.event_cardinality or '–'})".strip()
 
 
 def _most_precise(scores: Mapping[str, float] | None, order: Iterable[str], tau: float) -> str | None:
