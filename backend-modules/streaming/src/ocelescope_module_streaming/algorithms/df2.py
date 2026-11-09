@@ -18,20 +18,36 @@ from ocelescope_module_streaming.blocks import (
     ObjectTracker,
     RelationsSnapshot,
 )
-from ocelescope_module_streaming.catalog import BufferSpec, ElementScores, register_algorithm
+from ocelescope_module_streaming.catalog import (
+    ACTIVITIES_BOUND,
+    ARCS_BOUND,
+    ENDPOINTS_BOUND,
+    BufferSpec,
+    ElementScores,
+    register_algorithm,
+)
 from ocelescope_module_streaming.framework import Buffer, BufferConfig, StreamingAlgorithm
 from ocelescope_module_streaming.models import DF2Graph, build_df2
 from ocelescope_module_streaming.stream import Event, StreamItem, StreamOptions
 
 DF2_BUFFERS = (
-    BufferSpec("objects", "Objects", "The last activity of every open object."),
-    BufferSpec("arcs", "Arcs", "Directly-follows relations per object type with their frequencies."),
-    BufferSpec("starts", "Start activities", "Start activities per object type with their frequencies."),
-    BufferSpec("ends", "End activities", "End activities of evicted objects with their frequencies."),
-    BufferSpec("activities", "Activities", "Event counts per activity."),
-    BufferSpec("relations", "Activity–type relations", "Event counts per activity and object type."),
-    BufferSpec("divergence", "Divergence index", "The first full object set per activity, type and typed set."),
-    BufferSpec("divergent", "Divergent pairs", "Activity–type pairs found to diverge."),
+    BufferSpec(
+        "objects", "Objects", "The last activity of every open object. Grows with the number of objects in the log."
+    ),
+    BufferSpec("arcs", "Arcs", "Directly-follows relations per object type with their frequencies.", ARCS_BOUND),
+    BufferSpec(
+        "starts", "Start activities", "Start activities per object type with their frequencies.", ENDPOINTS_BOUND
+    ),
+    BufferSpec("ends", "End activities", "End activities of evicted objects with their frequencies.", ENDPOINTS_BOUND),
+    BufferSpec("activities", "Activities", "Event counts per activity.", ACTIVITIES_BOUND),
+    BufferSpec("relations", "Activity–type relations", "Event counts per activity and object type.", ENDPOINTS_BOUND),
+    BufferSpec(
+        "divergence",
+        "Divergence index",
+        "The first full object set per activity, type and typed object set. Grows with the number of distinct "
+        "object combinations; entries of a pair are dropped once it diverges.",
+    ),
+    BufferSpec("divergent", "Divergent pairs", "Activity–type pairs found to diverge.", ENDPOINTS_BOUND),
 )
 
 EVENTS_ONLY = StreamOptions(events=True, object_to_object=False, attribute_updates=False)

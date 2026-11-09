@@ -60,19 +60,19 @@ from pydantic import BaseModel
 
 from ocelescope_module_streaming.algorithms import compare_ocdfgs
 from ocelescope_module_streaming.blocks import DFSnapshot, DirectlyFollowsCounters, DivergenceIndex, ObjectTracker
-from ocelescope_module_streaming.catalog import BufferSpec, NoParams, register_algorithm
+from ocelescope_module_streaming.catalog import ARCS_BOUND, ENDPOINTS_BOUND, BufferSpec, NoParams, register_algorithm
 from ocelescope_module_streaming.framework import Buffer, BufferConfig, StreamingAlgorithm, run
 from ocelescope_module_streaming.models import build_ocdfg
 from ocelescope_module_streaming.ocel import ocel_stream
 from ocelescope_module_streaming.stream import Event, StreamItem, StreamOptions
 
 BUFFERS = (
-    BufferSpec("objects", "Objects", "The last activity of every open object."),
-    BufferSpec("arcs", "Arcs", "Directly-follows relations with their frequencies."),
-    BufferSpec("starts", "Start activities", "Start activities per object type."),
-    BufferSpec("ends", "End activities", "End activities of evicted objects."),
-    BufferSpec("divergence", "Divergence index", "The first full object set per activity, type and typed set."),
-    BufferSpec("divergent", "Divergent pairs", "Activity–type pairs found to diverge."),
+    BufferSpec("objects", "Objects", "The last activity of every open object. Grows with the number of objects."),
+    BufferSpec("arcs", "Arcs", "Directly-follows relations with their frequencies.", bounded_by=ARCS_BOUND),
+    BufferSpec("starts", "Start activities", "Start activities per object type.", bounded_by=ENDPOINTS_BOUND),
+    BufferSpec("ends", "End activities", "End activities of evicted objects.", bounded_by=ENDPOINTS_BOUND),
+    BufferSpec("divergence", "Divergence index", "First full object set per activity, type and typed set."),
+    BufferSpec("divergent", "Divergent pairs", "Activity–type pairs found to diverge.", bounded_by=ENDPOINTS_BOUND),
 )
 EVENTS_ONLY = StreamOptions(events=True, object_to_object=False, attribute_updates=False)
 
@@ -132,9 +132,13 @@ What `register_algorithm` needs:
 
 - `key`, `label`, `description`: the catalog entry. The key is stored in run
   configurations; do not rename it later.
-- `buffers`: one `BufferSpec(name, label, description)` per buffer, in
-  eviction order. The names are what `create_buffers`, `RunConfig.buffers`
-  and the frontend use; the labels and descriptions are shown in the form.
+- `buffers`: one `BufferSpec(name, label, description, bounded_by)` per
+  buffer, in eviction order. The names are what `create_buffers`,
+  `RunConfig.buffers` and the frontend use; labels and descriptions are shown
+  in the form (say in the description what the buffer's size grows with).
+  Set `bounded_by` for buffers whose size is bounded by the log's vocabulary,
+  e.g. `ARCS_BOUND`, `ENDPOINTS_BOUND` or `ACTIVITIES_BOUND` from
+  `catalog`: the frontend collapses them and the quick setup skips them.
 - `stream`: the item kinds the algorithm consumes by default.
 - `offline(ocel)`: the reference model of the complete log. Prefer an
   independent implementation (e.g. `ocdfg_miner`, `offline_df2`,

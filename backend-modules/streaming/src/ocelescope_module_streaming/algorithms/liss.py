@@ -117,8 +117,17 @@ def compare_liss_ocdfgs(streaming: DirectlyFollowsGraph, reference: DirectlyFoll
     label="Streaming OC-DFG (Liss et al.)",
     description="OC-DFG from a buffer of arc observations; the model is the buffer content (Liss et al. 2025).",
     buffers=(
-        BufferSpec("objects", "Objects", "The last activity and time of every open object."),
-        BufferSpec("arcs", "Arc observations", "One entry per object and directly-follows step."),
+        BufferSpec(
+            "objects",
+            "Objects",
+            "The last activity and time of every open object. Grows with the number of objects in the log.",
+        ),
+        BufferSpec(
+            "arcs",
+            "Arc observations",
+            "One entry per object and directly-follows step; the model is computed from these entries. "
+            "Grows with the length of the stream.",
+        ),
     ),
     stream=StreamOptions(events=True, object_to_object=False, attribute_updates=False),
     offline=ocdfg_miner,
@@ -288,9 +297,17 @@ def compare_totems(streaming: Totem, reference: Totem) -> dict[str, ElementScore
     label="Streaming TOTeM (Liss et al.)",
     description="Temporal object type model from buffers of lifespans and cardinality observations (Liss et al. 2025).",
     buffers=(
-        BufferSpec("lifespans", "Lifespans", "First and last event time per object."),
-        BufferSpec("log_cardinality", "Log cardinalities", "Object pairs of different types related by an item."),
-        BufferSpec("event_cardinality", "Event cardinalities", "Cardinalities allowed by an event per type pair."),
+        BufferSpec("lifespans", "Lifespans", "First and last event time per object. Grows with the number of objects."),
+        BufferSpec(
+            "log_cardinality",
+            "Log cardinalities",
+            "Object pairs of different types related by an item. Grows with the length of the stream.",
+        ),
+        BufferSpec(
+            "event_cardinality",
+            "Event cardinalities",
+            "Cardinalities an event allows per pair of its object types. Grows with the length of the stream.",
+        ),
     ),
     stream=StreamOptions(events=True, object_to_object=True, attribute_updates=False),
     offline=offline_totem,

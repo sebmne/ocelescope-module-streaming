@@ -14,10 +14,16 @@ pnpm run dev     # backend on :8000, frontend on :3000
    - **Algorithm** and its parameters.
    - **Stream items**: events, O2O updates, attribute updates. Positions count
      every replayed item, so this changes position-based heuristics.
-   - **Buffers**: per buffer an eviction mode (*Unbounded*, *Fixed capacity*,
-     *Heuristic schedule*, *Schedule + capacity*), the capacity, the heuristic
-     and its parameters. Only heuristics that support the chosen mode are
-     offered.
+   - **Buffers**: the buffers that grow with the stream (e.g. objects) come
+     first. **Quick setup** configures all of them at once; each buffer can
+     then be adjusted with a switch between *Unbounded*, *Capacity*,
+     *Schedule* (the heuristic decides when entries expire) and *Both*, plus
+     the capacity, the heuristic and its parameters. Only modes and
+     heuristics that fit together are offered. The info icon next to a buffer
+     explains what it stores and what its size depends on. Buffers that are
+     bounded by the log's vocabulary (at most one entry per activity or
+     activity–type combination) are collapsed, since they are finite for
+     every log.
 3. **Start run**. The canvas shows the streaming model, the offline reference
    or both side by side; the bar above it shows F1 per element kind.
    **Details** lists precision/recall and per-buffer statistics: mode,

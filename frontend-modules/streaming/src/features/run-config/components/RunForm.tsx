@@ -53,6 +53,7 @@ export function RunForm({ catalog, ocelId, onStarted }: RunFormProps) {
             heuristics={catalog.heuristics}
             values={state.buffers}
             onChange={(buffer, patch) => dispatch({ type: "updateBuffer", buffer, patch })}
+            onChangeMany={(buffers, patch) => dispatch({ type: "updateBuffers", buffers, patch })}
           />
           <TextInput
             label="Run name"

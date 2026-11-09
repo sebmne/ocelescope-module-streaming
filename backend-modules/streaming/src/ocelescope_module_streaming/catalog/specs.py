@@ -10,6 +10,19 @@ from pydantic import BaseModel, ConfigDict
 from ocelescope_module_streaming.framework import BufferConfig, EvictionMode, Heuristic, StreamingAlgorithm
 from ocelescope_module_streaming.stream import StreamOptions
 
+ARCS_BOUND = (
+    "At most |activities|² × |object types| entries: finite, since a log has finitely many activities and object types."
+)
+"""Why a buffer keyed by (activity, activity, object type) is bounded."""
+
+ENDPOINTS_BOUND = (
+    "At most |activities| × |object types| entries: finite, since a log has finitely many activities and object types."
+)
+"""Why a buffer keyed by (activity, object type) is bounded."""
+
+ACTIVITIES_BOUND = "At most |activities| entries: finite, since a log has finitely many activities."
+"""Why a buffer keyed by activity is bounded."""
+
 
 class NoParams(BaseModel):
     """Parameter model for components without parameters."""
@@ -24,12 +37,15 @@ class BufferSpec:
     Attributes:
         name: The buffer name, used to configure it.
         label: A human-readable name.
-        description: What the buffer stores.
+        description: What the buffer stores, and what its size grows with.
+        bounded_by: If the buffer's size is bounded by the log's vocabulary (finitely many
+            activities and object types), why; None if it grows with the stream.
     """
 
     name: str
     label: str
     description: str
+    bounded_by: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

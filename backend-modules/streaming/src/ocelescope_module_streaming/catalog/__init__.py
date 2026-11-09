@@ -14,6 +14,9 @@ from ocelescope_module_streaming.catalog.registry import (
     register_heuristic,
 )
 from ocelescope_module_streaming.catalog.specs import (
+    ACTIVITIES_BOUND,
+    ARCS_BOUND,
+    ENDPOINTS_BOUND,
     AlgorithmSpec,
     BufferSpec,
     ElementScores,
@@ -22,6 +25,9 @@ from ocelescope_module_streaming.catalog.specs import (
 )
 
 __all__ = [
+    "ACTIVITIES_BOUND",
+    "ARCS_BOUND",
+    "ENDPOINTS_BOUND",
     "AlgorithmSpec",
     "BufferSpec",
     "ElementScores",

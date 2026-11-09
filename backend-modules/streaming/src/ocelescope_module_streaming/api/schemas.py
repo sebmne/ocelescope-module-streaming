@@ -10,11 +10,20 @@ from ocelescope_module_streaming.runs import Preset, StreamSettings
 
 
 class BufferInfo(BaseModel):
-    """A buffer of an algorithm."""
+    """A buffer of an algorithm.
+
+    Attributes:
+        name: The buffer name.
+        label: A human-readable name.
+        description: What the buffer stores, and what its size grows with.
+        bounded_by: Why the buffer is bounded by the log's vocabulary, or None if it grows with
+            the stream.
+    """
 
     name: str
     label: str
     description: str
+    bounded_by: str | None = None
 
 
 class HeuristicInfo(BaseModel):
@@ -53,7 +62,10 @@ class AlgorithmInfo(BaseModel):
             key=spec.key,
             label=spec.label,
             description=spec.description,
-            buffers=[BufferInfo(name=b.name, label=b.label, description=b.description) for b in spec.buffers],
+            buffers=[
+                BufferInfo(name=b.name, label=b.label, description=b.description, bounded_by=b.bounded_by)
+                for b in spec.buffers
+            ],
             stream=StreamSettings.from_options(spec.stream),
             params_schema=spec.params.model_json_schema(),
         )

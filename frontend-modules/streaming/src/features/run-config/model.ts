@@ -17,10 +17,22 @@ export type Params = Record<string, unknown>;
 export type BufferMode = "unbounded" | EvictionMode;
 
 export const BUFFER_MODES: { value: BufferMode; label: string; description: string }[] = [
-  { value: "unbounded", label: "Unbounded", description: "Never evicts." },
-  { value: "capacity", label: "Fixed capacity", description: "When full, the heuristic picks the entry to evict." },
-  { value: "expiry", label: "Heuristic schedule", description: "The heuristic decides when each entry expires." },
-  { value: "both", label: "Schedule + capacity", description: "Entries expire on schedule and the size is bounded." },
+  { value: "unbounded", label: "Unbounded", description: "Keeps every entry; never evicts." },
+  {
+    value: "capacity",
+    label: "Capacity",
+    description: "Holds at most a fixed number of entries. When full, the heuristic picks the entry to evict.",
+  },
+  {
+    value: "expiry",
+    label: "Schedule",
+    description: "No size limit. The heuristic decides when each entry expires, e.g. after a period of inactivity.",
+  },
+  {
+    value: "both",
+    label: "Both",
+    description: "Entries expire on the heuristic's schedule, and the size is limited as well.",
+  },
 ];
 
 /** Whether a mode limits the number of entries. */
@@ -49,6 +61,7 @@ export type RunFormAction =
   | { type: "setAlgorithmParams"; params: Params }
   | { type: "setStream"; stream: Partial<StreamSettings> }
   | { type: "updateBuffer"; buffer: string; patch: Partial<BufferFormState> }
+  | { type: "updateBuffers"; buffers: string[]; patch: Partial<BufferFormState> }
   | { type: "setName"; name: string }
   | { type: "setMonitorBuffers"; monitorBuffers: boolean };
 
@@ -120,6 +133,16 @@ export function runFormReducer(state: RunFormState, action: RunFormAction): RunF
       return keepPresetIfUnchanged(state, {
         ...state,
         buffers: { ...state.buffers, [action.buffer]: { ...state.buffers[action.buffer], ...action.patch } },
+      });
+    case "updateBuffers":
+      return keepPresetIfUnchanged(state, {
+        ...state,
+        buffers: {
+          ...state.buffers,
+          ...Object.fromEntries(
+            action.buffers.map((name) => [name, { ...state.buffers[name], ...action.patch }] as const),
+          ),
+        },
       });
     case "setName":
       return { ...state, name: action.name };

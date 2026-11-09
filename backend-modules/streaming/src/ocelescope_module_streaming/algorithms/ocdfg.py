@@ -8,7 +8,13 @@ from ocelescope.discovery import ocdfg_miner
 from pydantic import BaseModel
 
 from ocelescope_module_streaming.blocks import DirectlyFollowsCounters, ObjectTracker
-from ocelescope_module_streaming.catalog import BufferSpec, ElementScores, register_algorithm
+from ocelescope_module_streaming.catalog import (
+    ARCS_BOUND,
+    ENDPOINTS_BOUND,
+    BufferSpec,
+    ElementScores,
+    register_algorithm,
+)
 from ocelescope_module_streaming.framework import Buffer, BufferConfig, StreamingAlgorithm
 from ocelescope_module_streaming.models import build_ocdfg
 from ocelescope_module_streaming.stream import Event, StreamItem, StreamOptions
@@ -49,10 +55,18 @@ def compare_ocdfgs(streaming: DirectlyFollowsGraph, reference: DirectlyFollowsGr
     label="Streaming OC-DFG",
     description="Discovers an object-centric directly-follows graph with start and end activities per object type.",
     buffers=(
-        BufferSpec("objects", "Objects", "The last activity of every open object."),
-        BufferSpec("arcs", "Arcs", "Directly-follows relations with their frequencies."),
-        BufferSpec("starts", "Start activities", "Start activities per object type with their frequencies."),
-        BufferSpec("ends", "End activities", "End activities of evicted objects with their frequencies."),
+        BufferSpec(
+            "objects",
+            "Objects",
+            "The last activity of every open object. Grows with the number of objects in the log.",
+        ),
+        BufferSpec("arcs", "Arcs", "Directly-follows relations with their frequencies.", bounded_by=ARCS_BOUND),
+        BufferSpec(
+            "starts", "Start activities", "Start activities per object type with their frequencies.", ENDPOINTS_BOUND
+        ),
+        BufferSpec(
+            "ends", "End activities", "End activities of evicted objects with their frequencies.", ENDPOINTS_BOUND
+        ),
     ),
     stream=StreamOptions(events=True, object_to_object=False, attribute_updates=False),
     offline=_offline,
