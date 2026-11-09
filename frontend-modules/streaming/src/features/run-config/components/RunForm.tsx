@@ -1,4 +1,4 @@
-import { Alert, Button, Divider, List, ScrollArea, Stack, TextInput } from "@mantine/core";
+import { Alert, Button, Checkbox, Divider, List, ScrollArea, Stack, TextInput } from "@mantine/core";
 import { useQueryClient } from "@tanstack/react-query";
 import { PlayIcon } from "lucide-react";
 import { type Catalog, getListRunsQueryKey, type RunSummary, useStartRun } from "../../../api/streaming";
@@ -87,6 +87,13 @@ export function RunForm({ catalog, ocelId, onStarted }: RunFormProps) {
         >
           Start run
         </Button>
+        <Checkbox
+          size="xs"
+          label="Monitor buffer sizes"
+          description="Records the entries of every buffer at 200 points of the run and plots them."
+          checked={state.monitorBuffers}
+          onChange={(event) => dispatch({ type: "setMonitorBuffers", monitorBuffers: event.currentTarget.checked })}
+        />
       </Stack>
     </Stack>
   );

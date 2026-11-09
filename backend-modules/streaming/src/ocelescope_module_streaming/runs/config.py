@@ -64,6 +64,7 @@ class RunConfig(BaseModel):
         buffers: Settings per buffer name. Buffers without settings are unbounded.
         stream: The item kinds to replay, or None for the algorithm's defaults.
         name: A display name for the run, or None to derive one from the configuration.
+        monitor_buffers: Whether to record the size of every buffer at up to 200 positions.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -74,3 +75,4 @@ class RunConfig(BaseModel):
     buffers: dict[str, BufferSetting] = Field(default_factory=dict)
     stream: StreamSettings | None = None
     name: str | None = None
+    monitor_buffers: bool = False

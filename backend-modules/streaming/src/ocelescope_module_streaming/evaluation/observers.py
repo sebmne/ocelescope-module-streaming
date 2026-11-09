@@ -125,3 +125,61 @@ class BufferMonitor(Observer):
             )
             for name in self._peak
         }
+
+
+class BufferSizeSeries(BaseModel):
+    """Buffer sizes sampled during a run.
+
+    Attributes:
+        positions: The stream positions at which the sizes were taken, ascending.
+        sizes: The number of entries per buffer name, one value per position.
+        capacities: The capacity per buffer name, or None if it has no size limit.
+    """
+
+    positions: list[int]
+    sizes: dict[str, list[int]]
+    capacities: dict[str, int | None]
+
+
+class BufferSampler(Observer):
+    """Records the number of entries of every buffer at up to `samples` evenly spaced positions.
+
+    The positions are chosen from the expected stream length. The size after the last item is
+    always recorded once `finish` is called, even if the stream was longer than expected.
+
+    Args:
+        expected_items: The expected number of stream items.
+        samples: The maximum number of measurements.
+    """
+
+    def __init__(self, expected_items: int, samples: int = 200) -> None:
+        total = max(expected_items, 1)
+        count = min(samples, total)
+        self._targets = {max(1, round(k * total / count)) for k in range(1, count + 1)}
+        self._samples = samples
+        self._positions: list[int] = []
+        self._sizes: dict[str, list[int]] = {}
+        self._capacities: dict[str, int | None] = {}
+
+    def on_item(self, position: int, item: StreamItem, algorithm: StreamingAlgorithm[Any]) -> None:
+        if position in self._targets:
+            self._record(position, algorithm)
+
+    def finish(self, position: int, algorithm: StreamingAlgorithm[Any]) -> None:
+        """Records the sizes after the last item, `position`, unless already recorded."""
+        if position > 0 and (not self._positions or self._positions[-1] != position):
+            if len(self._positions) >= self._samples:
+                self._positions.pop()
+                for sizes in self._sizes.values():
+                    sizes.pop()
+            self._record(position, algorithm)
+
+    def series(self) -> BufferSizeSeries:
+        """Returns the recorded measurements."""
+        return BufferSizeSeries(positions=list(self._positions), sizes=self._sizes, capacities=self._capacities)
+
+    def _record(self, position: int, algorithm: StreamingAlgorithm[Any]) -> None:
+        self._positions.append(position)
+        for buffer in algorithm.buffers:
+            self._sizes.setdefault(buffer.name, []).append(len(buffer))
+            self._capacities[buffer.name] = buffer.capacity

@@ -10,8 +10,8 @@ from ocelescope_backend.app.internal.exceptions import NotFound
 from ocelescope_backend.app.internal.tasks.base import TaskBase, TaskState
 from ocelescope_backend.app.sse_manager import ErrorNotification, sse_manager
 
-from ocelescope_module_streaming.evaluation import BufferMonitor, ProgressMonitor, RunCancelled
-from ocelescope_module_streaming.framework import run
+from ocelescope_module_streaming.evaluation import BufferMonitor, BufferSampler, ProgressMonitor, RunCancelled
+from ocelescope_module_streaming.framework import Observer, run
 from ocelescope_module_streaming.ocel import UnknownLog, ocel_stream, stream_length
 from ocelescope_module_streaming.runs.config import RunConfig
 from ocelescope_module_streaming.runs.factory import PreparedRun, prepare_run
@@ -106,10 +106,16 @@ class StreamingRunTask(TaskBase):
         ocel = self.session.get_ocel(self.config.ocel_id).open()
         try:
             self.progress.total = stream_length(ocel, stream_options)
+            observers: list[Observer] = [progress, buffers]
+            sampler = BufferSampler(self.progress.total) if self.config.monitor_buffers else None
+            if sampler is not None:
+                observers.append(sampler)
             started = time.perf_counter()
             with ocel_stream(ocel, stream_options) as stream:
-                model = run(self.prepared.algorithm, stream, [progress, buffers])
+                model = run(self.prepared.algorithm, stream, observers)
             duration = time.perf_counter() - started
+            if sampler is not None:
+                sampler.finish(buffers.items, self.prepared.algorithm)
             self.progress.processed = buffers.items
             if self.stop_event.is_set():
                 raise RunCancelled
@@ -128,6 +134,7 @@ class StreamingRunTask(TaskBase):
             scores=dict(spec.compare(model, reference)),
             buffers=buffers.statistics(),
             duration_seconds=duration,
+            buffer_sizes=sampler.series() if sampler is not None else None,
         )
 
     def _reusable_reference_id(self) -> str | None:

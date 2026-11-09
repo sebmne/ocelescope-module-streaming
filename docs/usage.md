@@ -24,6 +24,12 @@ pnpm run dev     # backend on :8000, frontend on :3000
    capacity, peak and mean size, evictions per reason, and premature
    evictions ("evicted too early").
 
+**Monitor buffer sizes** (below *Start run*) records the number of entries of
+every buffer at 200 evenly spaced points of the run, plus the last item. The
+plots appear under the metrics; a dashed grey line marks a buffer's capacity.
+From Python, pass `evaluation.BufferSampler(expected_items)` as an observer
+and call `sampler.finish(last_position, algorithm)` after the run.
+
 Both models are also added to the session's resources.
 
 ## From Python

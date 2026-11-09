@@ -40,6 +40,7 @@ export type RunFormState = {
   buffers: Record<string, BufferFormState>;
   name: string;
   preset: string | null;
+  monitorBuffers: boolean;
 };
 
 export type RunFormAction =
@@ -48,7 +49,8 @@ export type RunFormAction =
   | { type: "setAlgorithmParams"; params: Params }
   | { type: "setStream"; stream: Partial<StreamSettings> }
   | { type: "updateBuffer"; buffer: string; patch: Partial<BufferFormState> }
-  | { type: "setName"; name: string };
+  | { type: "setName"; name: string }
+  | { type: "setMonitorBuffers"; monitorBuffers: boolean };
 
 const unboundedBuffer = (): BufferFormState => ({
   mode: "unbounded",
@@ -86,13 +88,14 @@ export function initialRunForm(algorithm: AlgorithmInfo): RunFormState {
     buffers: Object.fromEntries(algorithm.buffers.map((buffer) => [buffer.name, unboundedBuffer()])),
     name: "",
     preset: null,
+    monitorBuffers: false,
   };
 }
 
 export function runFormReducer(state: RunFormState, action: RunFormAction): RunFormState {
   switch (action.type) {
     case "selectAlgorithm":
-      return { ...initialRunForm(action.algorithm), name: state.name };
+      return { ...initialRunForm(action.algorithm), name: state.name, monitorBuffers: state.monitorBuffers };
     case "applyPreset": {
       const initial = initialRunForm(action.algorithm);
       const buffers = { ...initial.buffers };
@@ -106,6 +109,7 @@ export function runFormReducer(state: RunFormState, action: RunFormAction): RunF
         buffers,
         name: action.preset.label,
         preset: action.preset.key,
+        monitorBuffers: state.monitorBuffers,
       };
     }
     case "setAlgorithmParams":
@@ -119,6 +123,8 @@ export function runFormReducer(state: RunFormState, action: RunFormAction): RunF
       });
     case "setName":
       return { ...state, name: action.name };
+    case "setMonitorBuffers":
+      return { ...state, monitorBuffers: action.monitorBuffers };
   }
 }
 
@@ -175,6 +181,7 @@ export function toRunConfig(state: RunFormState, ocelId: string): RunConfig {
     algorithm_params: state.algorithmParams,
     stream: state.stream,
     name: state.name.trim() || null,
+    monitor_buffers: state.monitorBuffers,
     buffers: Object.fromEntries(
       Object.entries(state.buffers)
         .filter(([, buffer]) => buffer.mode !== "unbounded")
