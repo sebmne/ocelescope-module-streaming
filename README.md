@@ -1,5 +1,10 @@
 # Ocelescope instance template
 
+> **Streaming module:** this instance contains a module for object-centric
+> process discovery on event streams with bounded memory. Its documentation —
+> architecture, usage and guides for implementing eviction heuristics and
+> streaming algorithms — is in [`docs/`](docs/README.md).
+
 A starter monorepo for running your own [Ocelescope](https://www.ocelescope.org)
 instance and building your own modules.
 
