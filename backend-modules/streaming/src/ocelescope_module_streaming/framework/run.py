@@ -86,6 +86,7 @@ def run(algorithm: StreamingAlgorithm[M], stream: Iterable[StreamItem], observer
                 while buffer.over_capacity() and (key := buffer.victim()) is not None:
                     evict(buffer, key, EvictionReason.CAPACITY)
                     evicted = True
+        algorithm.after_evictions(position)
         for observer in observers:
             observer.on_item(position, item, algorithm)
     return algorithm.model()

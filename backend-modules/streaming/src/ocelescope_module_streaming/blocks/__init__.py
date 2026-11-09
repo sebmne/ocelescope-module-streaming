@@ -13,6 +13,15 @@ from ocelescope_module_streaming.blocks.directly_follows import (
 )
 from ocelescope_module_streaming.blocks.divergence import DivergenceIndex, IndexKey
 from ocelescope_module_streaming.blocks.objects import LastSeen, ObjectListener, ObjectTracker, Retired, Transition
+from ocelescope_module_streaming.blocks.observations import (
+    ArcObservation,
+    DirectlyFollowsLog,
+    EventCardinalityObservation,
+    Lifespan,
+    LogCardinalityObservation,
+    ObjectInteractions,
+    coupled_removal,
+)
 from ocelescope_module_streaming.blocks.relations import (
     ActivityTypeRelations,
     Relation,
@@ -21,6 +30,13 @@ from ocelescope_module_streaming.blocks.relations import (
 )
 
 __all__ = [
+    "ArcObservation",
+    "DirectlyFollowsLog",
+    "EventCardinalityObservation",
+    "Lifespan",
+    "LogCardinalityObservation",
+    "ObjectInteractions",
+    "coupled_removal",
     "ActivityTypeRelations",
     "Arc",
     "DFSnapshot",

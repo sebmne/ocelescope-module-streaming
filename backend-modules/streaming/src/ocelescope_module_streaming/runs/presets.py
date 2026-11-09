@@ -66,5 +66,25 @@ PRESETS: list[Preset] = [
             "divergence": BufferSetting(heuristic="max_age", heuristic_params={"age": 2000}),
         },
     ),
+    Preset(
+        key="liss2025-ocdfg",
+        label="Streaming OC-DFG, FIFO buffers (Liss et al. 2025)",
+        description="Object and arc-observation buffers of 1000 entries each, replaced first in, first out.",
+        algorithm="liss_ocdfg",
+        buffers={
+            "objects": BufferSetting(capacity=1000, heuristic="fifo"),
+            "arcs": BufferSetting(capacity=1000, heuristic="fifo"),
+        },
+    ),
+    Preset(
+        key="liss2025-totem",
+        label="Streaming TOTeM, FIFO buffers (Liss et al. 2025)",
+        description="Lifespan and cardinality buffers of 1000 entries each, replaced first in, first out.",
+        algorithm="liss_totem",
+        buffers={
+            name: BufferSetting(capacity=1000, heuristic="fifo")
+            for name in ("lifespans", "log_cardinality", "event_cardinality")
+        },
+    ),
 ]
 """The available presets."""

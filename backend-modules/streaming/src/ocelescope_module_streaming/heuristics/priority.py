@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ocelescope_module_streaming.catalog import UnknownEntry, heuristics, register_heuristic
 from ocelescope_module_streaming.framework import Context, Entry, EvictionMode, EvictionReason, Heuristic
-from ocelescope_module_streaming.heuristics.ranking import normalize, normalize_map, owner_type
+from ocelescope_module_streaming.heuristics.ranking import normalize, normalize_map, owner_pair, owner_type
 from ocelescope_module_streaming.stream import Event, O2OUpdate, ObjectRef, StreamItem
 
 Order = Literal["min", "max"]
@@ -208,6 +208,18 @@ class PriorityParams(BaseModel):
     custom_order: list[str] = Field(default_factory=list, description="Object types for the custom feature.")
 
 
+def _combine(rank: float, types: tuple[str | None, ...], priorities: dict[str, float]) -> float:
+    """The combined rank of an entry about one object type, or about a type pair."""
+    known = [priorities[t] for t in types if t is not None and t in priorities]
+    if len(types) == 1:
+        return rank + known[0] if known else 2 * rank
+    if len(known) == 2:
+        return 2 * rank + known[0] + known[1]
+    if len(known) == 1:
+        return 2 * rank + 2 * known[0]
+    return 4 * rank
+
+
 def make_feature(feature: FeatureName, custom_order: Sequence[str] = ()) -> TypeFeature:
     """Creates a type feature with the reference implementation's default windows."""
     match feature:
@@ -237,9 +249,11 @@ def make_feature(feature: FeatureName, custom_order: Sequence[str] = ()) -> Type
 class Priority(Heuristic):
     """A cache policy combined with an object-type priority policy.
 
-    Each candidate gets its min-max normalized cache rank (0 = evicted first) plus the min-max
-    normalized feature value of its object type; candidates whose type has no value count their
-    cache rank twice. The lowest sum is evicted.
+    Each candidate gets its min-max normalized cache rank r (0 = evicted first) plus the min-max
+    normalized feature value p of its object type; candidates whose type has no value count
+    their cache rank twice. Entries about a type pair (a, b), as in the TOTeM cardinality
+    buffers, get 2r + p(a) + p(b), with 2p of the known type if only one is known and 4r if
+    none is. The lowest sum is evicted.
 
     Args:
         cache: Key of the cache policy.
@@ -271,14 +285,11 @@ class Priority(Heuristic):
 
     def scores(self, candidates: Sequence[tuple[Any, Entry[Any]]], ctx: Context) -> list[float]:
         cache_ranks = normalize([-score for score in self.cache.scores(candidates, ctx)])
-        types = [owner_type(key, entry) for key, entry in candidates]
+        owners = [owner_pair(entry) or (owner_type(key, entry),) for key, entry in candidates]
         values = self.feature.values(self.order)
-        present = {t: values[t] for t in set(types) if t is not None and t in values}
+        present = {t: values[t] for types in owners for t in types if t is not None and t in values}
         priorities = normalize_map(present)
-        ranks = [
-            rank + priorities[t] if t in priorities else 2 * rank for rank, t in zip(cache_ranks, types, strict=True)
-        ]
-        return [-rank for rank in ranks]
+        return [-_combine(rank, types, priorities) for rank, types in zip(cache_ranks, owners, strict=True)]
 
     def score(self, key: Any, entry: Entry[Any], ctx: Context) -> float:
         return self.scores([(key, entry)], ctx)[0]

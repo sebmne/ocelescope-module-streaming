@@ -37,3 +37,11 @@ def owner_type(key: Any, entry: Entry[Any]) -> str | None:
         return obj.type
     object_type = getattr(value, "object_type", None)
     return object_type if isinstance(object_type, str) else None
+
+
+def owner_pair(entry: Entry[Any]) -> tuple[str, str | None] | None:
+    """The type pair of an entry about two object types (value attribute `types`), if any."""
+    types = getattr(entry.value, "types", None)
+    if isinstance(types, tuple) and len(types) == 2:
+        return types  # type: ignore[return-value]
+    return None

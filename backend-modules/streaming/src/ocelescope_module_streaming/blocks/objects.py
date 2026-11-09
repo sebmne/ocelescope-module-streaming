@@ -32,6 +32,7 @@ class Transition:
         activity: The new activity.
         time: The timestamp of the new event.
         objects: The number of objects of the same type in the event, |O⇂type(obj)|.
+        relations: The number of E2O relations of the event.
     """
 
     obj: ObjectRef
@@ -40,6 +41,7 @@ class Transition:
     activity: str
     time: datetime
     objects: int
+    relations: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,6 +98,7 @@ class ObjectTracker:
                 activity=event.activity,
                 time=time,
                 objects=per_type[obj.type],
+                relations=len(event.relations),
             )
             for listener in self._listeners:
                 listener.on_transition(transition)
