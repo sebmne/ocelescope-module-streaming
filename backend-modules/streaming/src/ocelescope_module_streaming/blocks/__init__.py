@@ -11,6 +11,7 @@ from ocelescope_module_streaming.blocks.directly_follows import (
     Endpoint,
     increment,
 )
+from ocelescope_module_streaming.blocks.divergence import DivergenceIndex, IndexKey
 from ocelescope_module_streaming.blocks.objects import LastSeen, ObjectListener, ObjectTracker, Retired, Transition
 from ocelescope_module_streaming.blocks.relations import (
     ActivityTypeRelations,
@@ -24,7 +25,9 @@ __all__ = [
     "Arc",
     "DFSnapshot",
     "DirectlyFollowsCounters",
+    "DivergenceIndex",
     "Endpoint",
+    "IndexKey",
     "LastSeen",
     "ObjectListener",
     "ObjectTracker",

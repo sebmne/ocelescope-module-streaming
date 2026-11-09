@@ -280,8 +280,8 @@ $\mathit{def} = \{(a,t) \in \mathit{rel} \mid N(a,t) < N(a)\}$.
 Let $h \colon 2^{\Uobj} \to \mathbb{Z}$ be a fast hash
 (implementation: Python \texttt{hash(frozenset(ids))}; collisions accepted).
 Buffer $B_{\mathit{div}}$ with keys $\Uact \times \Utype \times \mathbb{Z}$ and
-values $\mathbb{Z}$, and the set $\mathit{div} \subseteq \Uact \times \Utype$
-(part of the model, not a buffer). On $s_i$, for each type $t$ with
+values $\mathbb{Z}$, and a buffer $B_{\mathit{divergent}}$ holding the set
+$\mathit{div} \subseteq \Uact \times \Utype$ (small; normally unbounded). On $s_i$, for each type $t$ with
 $\proj{O}{t} \ne \emptyset$ and $(a,t) \notin \mathit{div}$, let
 $k = (a, t, h(\proj{O}{t}))$:
 if $k \in \dom(b_{\mathit{div}})$ and $b_{\mathit{div}}(k) \ne h(O)$, add
@@ -301,6 +301,9 @@ $\Sigma = \{a \mid N(a) > 0\}$ and
 \end{align*}
 The divergence filter on start and end activities is a design decision; the
 offline reference applies the same filter.
+The offline reference computes the same graph from the complete log, with
+events in replay order, exact object sets instead of hashes, and
+$\mathit{End}(a,t)$ from the last activity of every object.
 \end{definition}
 
 \begin{definition}[OCPT discovery]\label{def:ocpt}
