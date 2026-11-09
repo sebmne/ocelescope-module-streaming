@@ -18,6 +18,7 @@
 		"docker": "docker compose up --build",
 		"docker:down": "docker compose down",
 		"check:backend": "cd backend-modules/streaming && uv run ruff check && uv run pyright && uv run pytest -q",
-		"format:backend": "cd backend-modules/streaming && uv run ruff format && uv run ruff check --fix"
+		"format:backend": "cd backend-modules/streaming && uv run ruff format && uv run ruff check --fix",
+		"check:frontend": "pnpm --filter @instance/streaming typecheck && pnpm --filter @instance/app typecheck"
 	}
 }

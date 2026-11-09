@@ -1,0 +1,9 @@
+# Changes here will be overwritten by Copier; do NOT edit manually
+_commit: 36a9b58
+_src_path: gh:promi4s/create-ocelescope-frontend-module
+api_module: streaming
+author: Menne, Sebastian
+description: Object-centric process discovery on event streams with bounded buffers
+    and eviction heuristics
+module_label: Streaming
+npm_package: '@instance/streaming'

@@ -152,6 +152,37 @@ def ocel_stream(ocel: OCEL, options: StreamOptions = StreamOptions()) -> Iterato
             cursor.close()
 
 
+def stream_length(ocel: OCEL, options: StreamOptions = StreamOptions()) -> int:
+    """Returns the number of items `ocel_stream` yields for `ocel`, for progress reporting.
+
+    An object change without a field is counted once, although it may yield several attribute
+    updates, so the result can be slightly lower than the actual length.
+
+    Args:
+        ocel: The event log.
+        options: The item kinds to include.
+    """
+    counts: list[str] = []
+    if options.events:
+        counts.append(
+            f"SELECT count(DISTINCT r.{_EID}) FROM {ident(E2O_TABLE)} r "
+            f"JOIN {ident(OBJECTS_TABLE)} o ON o.{_OID} = r.{_OID}"
+        )
+    if options.attribute_updates:
+        counts.append(
+            f"SELECT count(*) FROM {ident(OBJECT_CHANGES_TABLE)} c JOIN {ident(OBJECTS_TABLE)} o ON o.{_OID} = c.{_OID}"
+        )
+    if options.object_to_object:
+        source, target = ident(O2O_SOURCE_ID), ident(O2O_TARGET_ID)
+        counts.append(
+            f"SELECT count(*) FROM {ident(O2O_TABLE)} x "
+            f"JOIN {ident(OBJECTS_TABLE)} t ON t.{_OID} = x.{target} "
+            f"WHERE x.{source} IN (SELECT {_OID} FROM {ident(E2O_TABLE)}) "
+            f"AND x.{source} IN (SELECT {_OID} FROM {ident(OBJECTS_TABLE)})"
+        )
+    return sum(int(ocel.sql(query).fetchall()[0][0]) for query in counts)
+
+
 def _attribute_columns(ocel: OCEL, table: str, core: set[str]) -> list[str]:
     """Returns the columns of `table` that hold attribute values, in table order."""
     rows = ocel.sql(f"DESCRIBE {ident(table)}").fetchall()

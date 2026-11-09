@@ -20,6 +20,9 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@instance/streaming": [
+        "../frontend-modules/streaming/src/index.ts"
       ]
     }
   },

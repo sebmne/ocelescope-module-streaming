@@ -10,6 +10,7 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
+		"@instance/streaming": "workspace:*",
 		"@ocelescope/core": "catalog:",
 		"@ocelescope/discovery": "catalog:",
 		"@ocelescope/log-overview": "catalog:",

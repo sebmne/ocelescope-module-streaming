@@ -1,6 +1,7 @@
 """Bounded key-value buffers."""
 
 from collections.abc import Iterator
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
@@ -125,6 +126,11 @@ class Buffer(Generic[K, V]):
     def items(self) -> Iterator[tuple[K, V]]:
         """Returns an iterator over ``(key, value)`` pairs in insertion order."""
         return ((key, entry.value) for key, entry in self._entries.items())
+
+    @property
+    def touched(self) -> AbstractSet[K]:
+        """The keys written in the current step (read-only view)."""
+        return self._touched
 
     # Eviction, used by the run loop.
 

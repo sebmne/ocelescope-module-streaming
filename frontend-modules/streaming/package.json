@@ -1,0 +1,59 @@
+{
+	"name": "@instance/streaming",
+	"version": "0.1.0",
+	"description": "Object-centric process discovery on event streams with bounded buffers and eviction heuristics",
+	"author": "Menne, Sebastian",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./dist/index.js",
+		"./package.json": "./package.json"
+	},
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"files": [
+		"dist"
+	],
+	"scripts": {
+		"generate:api": "uv run ocelescope-backend openapi --module streaming",
+		"build": "pnpm run generate:api && orval && tsdown",
+		"dev": "tsdown --watch ./src",
+		"typecheck": "tsc --noEmit"
+	},
+	"peerDependencies": {
+		"@mantine/core": "catalog:",
+		"@mantine/hooks": "catalog:",
+		"@ocelescope/api-client": "catalog:",
+		"@ocelescope/core": "catalog:",
+		"@ocelescope/resources": "catalog:",
+		"@rjsf/core": "catalog:",
+		"@rjsf/mantine": "catalog:",
+		"@rjsf/utils": "catalog:",
+		"@rjsf/validator-ajv8": "catalog:",
+		"@tanstack/react-query": "catalog:",
+		"axios": "catalog:",
+		"lucide-react": "catalog:",
+		"react": "catalog:",
+		"react-dom": "catalog:"
+	},
+	"devDependencies": {
+		"@mantine/core": "catalog:",
+		"@mantine/hooks": "catalog:",
+		"@ocelescope/api-client": "catalog:",
+		"@ocelescope/api-config": "catalog:",
+		"@ocelescope/core": "catalog:",
+		"@ocelescope/resources": "catalog:",
+		"@rjsf/core": "catalog:",
+		"@rjsf/mantine": "catalog:",
+		"@rjsf/utils": "catalog:",
+		"@rjsf/validator-ajv8": "catalog:",
+		"@tanstack/react-query": "catalog:",
+		"@types/react": "catalog:",
+		"axios": "catalog:",
+		"lucide-react": "catalog:",
+		"orval": "catalog:",
+		"react": "catalog:",
+		"tsdown": "catalog:",
+		"typescript": "catalog:"
+	}
+}
