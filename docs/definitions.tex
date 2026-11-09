@@ -314,8 +314,33 @@ to an activity set $X$ with $|X| > 1$, it returns the node
 $\mathit{NoCut}(X)$; there is no fallback. Each leaf $a$ is annotated with
 $(a, \mathit{rel}(a), \mathit{con}(a), \mathit{div}(a), \mathit{def}(a))$
 from Defs.~\ref{def:relations} and~\ref{def:divergence}.
-TODO(WP4): state the cut conditions as implemented.
 \end{definition}
+
+\paragraph{Cut conditions (default cut miner).}
+Let $X$ be the current activity set, $E_X = E_\to \cap (X \times X)$, and
+$S_X, F_X \subseteq X$ its start and end activities: activities entered from
+(left to) an activity outside $X$ in the whole graph, plus the start (end)
+activities of the parent. All cuts are binary, $X = X_1 \uplus X_2$.
+\begin{itemize}
+  \item \emph{xor}: $X_1$ is the connected component (undirected $E_X$) with
+        the smallest activity, $X_2$ the rest; no edge connects them.
+  \item \emph{sequence}: from the condensation of $E_X$ into strongly
+        connected components, $X_1$ holds the components with outgoing and
+        $X_2$ those with incoming condensation edges (components with both are
+        assigned to $X_2$ if every $X_1$ component reaches but is not reached
+        by them, else to $X_1$); every $a \in X_1$ reaches every $b \in X_2$ in
+        $E_X$ and no $b$ reaches an $a$.
+  \item \emph{parallel}: greedily in activity order, every $a \in X_1$ and
+        $b \in X_2$ have $(a,b), (b,a) \in E_X$; both parts contain a start and
+        an end activity.
+  \item \emph{loop}: $X_1 \supseteq S_X \cup F_X$ (body); every other
+        activity is reachable without passing an end activity from $S_X$
+        (body) or without passing a start activity from $F_X$ (redo), but not
+        both; every end activity has an edge into $X_2$ and every start
+        activity an edge from $X_2$.
+\end{itemize}
+This is a port of \texttt{find\_cuts\_start} of the Rust reference and yields
+the same trees wherever a cut exists (tested on 801 graphs).
 
 % TODO(WP7): Liss et al. building blocks — arc observation log
 %   (key: fresh id; value (b|⊥, a, t, o, 1/|O⇂t|, duration)), relation log,

@@ -16,6 +16,7 @@ from ocelescope_module_streaming.blocks import (
     DirectlyFollowsCounters,
     DivergenceIndex,
     ObjectTracker,
+    RelationsSnapshot,
 )
 from ocelescope_module_streaming.catalog import BufferSpec, ElementScores, register_algorithm
 from ocelescope_module_streaming.framework import Buffer, BufferConfig, StreamingAlgorithm
@@ -74,6 +75,25 @@ def offline_df2(ocel: OCEL) -> DF2Graph:
     divergent = {(a, t) for (a, t, _), sets in full_sets.items() if len(sets) > 1}
     snapshot = DFSnapshot(arcs=dict(arcs), starts=dict(starts), ends=dict(ends))
     return build_df2(snapshot, {activity for activity, _ in events}, divergent)
+
+
+def offline_relations(ocel: OCEL) -> RelationsSnapshot:
+    """Computes rel, con and def of a complete log directly from its tables."""
+    eid, oid, otype, activity = ident(EID_COL), ident(OID_COL), ident(OTYPE_COL), ident(ACTIVITY_COL)
+    rows = ocel.sql(
+        f"WITH typed AS ("
+        f"  SELECT e.{eid} AS eid, e.{activity} AS act, o.{otype} AS ot, count(DISTINCT r.{oid}) AS n "
+        f"  FROM {ident(EVENTS_TABLE)} e JOIN {ident(E2O_TABLE)} r ON r.{eid} = e.{eid} "
+        f"  JOIN {ident(OBJECTS_TABLE)} o ON o.{oid} = r.{oid} GROUP BY 1, 2, 3"
+        f"), per_activity AS (SELECT act, count(DISTINCT eid) AS n FROM typed GROUP BY 1) "
+        f"SELECT t.act, t.ot, count(*), max(t.n), any_value(p.n) FROM typed t "
+        f"JOIN per_activity p ON p.act = t.act GROUP BY 1, 2"
+    ).fetchall()
+    return RelationsSnapshot(
+        rel=frozenset((a, t) for a, t, _, _, _ in rows),
+        con=frozenset((a, t) for a, t, _, most, _ in rows if most > 1),
+        deficient=frozenset((a, t) for a, t, events, _, total in rows if events < total),
+    )
 
 
 def df2_elements(graph: DF2Graph) -> dict[str, set[Any]]:

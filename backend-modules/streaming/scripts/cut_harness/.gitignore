@@ -1,0 +1,4 @@
+target/
+Cargo.lock
+src/start_cuts.rs
+src/start_cuts_opti.rs

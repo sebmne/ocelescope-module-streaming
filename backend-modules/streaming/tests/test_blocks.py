@@ -4,17 +4,14 @@ from collections.abc import Mapping
 from typing import Any
 
 from ocelescope import OCEL
-from ocelescope.ocel.constants.pm4py import ACTIVITY_COL, EID_COL, OID_COL, OTYPE_COL
-from ocelescope.ocel.constants.tables import E2O_TABLE, EVENTS_TABLE, OBJECTS_TABLE
-from ocelescope.util.sql import ident
 from support import event, obj, stream_of
 
+from ocelescope_module_streaming.algorithms import offline_relations
 from ocelescope_module_streaming.blocks import (
     ActivityTypeRelations,
     DirectlyFollowsCounters,
     ObjectTracker,
     RelationCounts,
-    RelationsSnapshot,
     Retired,
     Transition,
 )
@@ -111,25 +108,6 @@ def test_deficiency() -> None:
     blocks = Blocks()
     run(blocks, stream_of(event("a", order="o1", item="i1"), event("a", order="o2")))
     assert blocks.relations.snapshot().deficient == {("a", "item")}
-
-
-def offline_relations(ocel: OCEL) -> RelationsSnapshot:
-    """rel, con and def computed directly from the log tables."""
-    eid, oid, otype, activity = ident(EID_COL), ident(OID_COL), ident(OTYPE_COL), ident(ACTIVITY_COL)
-    rows = ocel.sql(
-        f"WITH typed AS ("
-        f"  SELECT e.{eid} AS eid, e.{activity} AS act, o.{otype} AS ot, count(DISTINCT r.{oid}) AS n "
-        f"  FROM {ident(EVENTS_TABLE)} e JOIN {ident(E2O_TABLE)} r ON r.{eid} = e.{eid} "
-        f"  JOIN {ident(OBJECTS_TABLE)} o ON o.{oid} = r.{oid} GROUP BY 1, 2, 3"
-        f"), per_activity AS (SELECT act, count(DISTINCT eid) AS n FROM typed GROUP BY 1) "
-        f"SELECT t.act, t.ot, count(*), max(t.n), any_value(p.n) FROM typed t "
-        f"JOIN per_activity p ON p.act = t.act GROUP BY 1, 2"
-    ).fetchall()
-    return RelationsSnapshot(
-        rel=frozenset((a, t) for a, t, _, _, _ in rows),
-        con=frozenset((a, t) for a, t, _, most, _ in rows if most > 1),
-        deficient=frozenset((a, t) for a, t, events, _, total in rows if events < total),
-    )
 
 
 def test_relations_equal_offline(container_logistics: OCEL) -> None:
