@@ -1,0 +1,379 @@
+% =============================================================================
+% definitions.tex — formal definitions of the streaming framework
+%
+% Single source of truth for the math behind backend-modules/streaming.
+% Every work package of issue #1 that introduces or changes a concept updates
+% this file in the same commit. Code docstrings refer to the definitions here
+% by label (e.g. "see def:run"). Sections marked TODO are owned by the work
+% package named there.
+%
+% Requires: amsmath, amssymb, amsthm (definition, proposition, remark envs).
+% =============================================================================
+
+% --- universes (as in the preliminaries) -------------------------------------
+\providecommand{\Usigma}{\mathbb{U}_{\Sigma}}
+\providecommand{\Uact}{\mathbb{U}_{\mathit{act}}}
+\providecommand{\Uobj}{\mathbb{U}_{\mathit{obj}}}
+\providecommand{\Utype}{\mathbb{U}_{\mathit{type}}}
+\providecommand{\Uattr}{\mathbb{U}_{\mathit{attr}}}
+\providecommand{\Uval}{\mathbb{U}_{\mathit{val}}}
+\providecommand{\Utime}{\mathbb{U}_{\mathit{time}}}
+\providecommand{\Uqual}{\mathbb{U}_{\mathit{qual}}}
+
+% --- framework notation ------------------------------------------------------
+\newcommand{\dom}{\mathit{dom}}
+\newcommand{\upd}{\mathit{upd}}
+\newcommand{\fin}{\mathit{fin}}
+\newcommand{\touched}{\mathit{touched}}
+\newcommand{\score}{\mathit{score}}
+\newcommand{\dl}{\delta}                    % deadline function
+\newcommand{\hupd}{\rho}                    % heuristic state update
+\newcommand{\proj}[2]{#1\!\Downarrow_{#2}}  % type projection O⇂t
+\newcommand{\obj}{\mathit{obj}}
+\newcommand{\otype}{\mathit{type}}
+\newcommand{\alast}{a_{\mathit{last}}}
+\newcommand{\Rcap}{\textsc{cap}}
+\newcommand{\Rexp}{\textsc{exp}}
+\newcommand{\Rdis}{\textsc{dis}}
+
+% =============================================================================
+\section{Object-Centric Event Streams}\label{sec:streams}
+% =============================================================================
+
+Small adaptation of the streaming definition of~\cite{Liss2025}.
+
+\begin{definition}[Object-centric event stream]\label{def:stream}
+An \emph{object-centric event stream} is a possibly infinite sequence
+$S = \langle s_1, s_2, \dots \rangle$ of items $s_i = (x_i, t_i)$ with a
+timestamp $t_i \in \Utime$, where $x_i$ is an event item, an object-to-object
+update or an attribute update.
+\begin{itemize}
+  \item An \emph{event item} is a tuple $x = (a, R, A)$ with the activity
+        $a \in \Uact$, a finite set of typed, optionally qualified E2O links
+        $R \subseteq \Uobj \times \Utype \times (\Uqual \cup \{\bot\})$, and the
+        event attributes $A \colon \Uattr \rightharpoonup \Uval$.
+        Its object set is $\obj(x) = \{o \mid (o, \cdot, \cdot) \in R\}$.
+  \item An \emph{object-to-object update} is a tuple
+        $x = (o_1, ot_1, q, o_2, ot_2)$ with $o_1, o_2 \in \Uobj$,
+        $ot_1, ot_2 \in \Utype$ and $q \in \Uqual \cup \{\bot\}$.
+  \item An \emph{attribute update} is a tuple
+        $x = (o, ot, \mathit{att}, v) \in \Uobj \times \Utype \times \Uattr \times (\Uval \cup \{\bot\})$,
+        where $v = \bot$ clears the attribute.
+\end{itemize}
+We write $\mathcal{I}$ for the set of all stream items and
+$\mathcal{I}_{\mathit{ev}} \subseteq \mathcal{I}$ for the event items.
+The stream is \emph{well-formed} if
+(i)~$t_i \le t_j$ for all $i \le j$, and
+(ii)~if $o$ occurs with type $ot$ in $s_i$ and with type $ot'$ in $s_j$, then
+$ot = ot'$; we write $\otype(o)$ for this type.
+\end{definition}
+
+\paragraph{Notation.}
+The index $i$ of $s_i$ is its \emph{position}; all ages, deadlines and
+thresholds in this document are measured in positions.
+For a set of objects $O$ and a type $t$, $\proj{O}{t} = \{o \in O \mid \otype(o) = t\}$.
+$S_{\le i} = \langle s_1, \dots, s_i \rangle$ is the prefix up to position $i$.
+
+\begin{remark}[Positions vs.\ events]
+If the stream contains only event items (the setting of the online OCPT
+miner), positions coincide with event indices, so $\Delta(o)$ of
+Def.~\ref{def:lifecycle} is exactly the inactivity of~\cite{Muehlmeyer2026}.
+\end{remark}
+
+\begin{remark}[Replay convention, evaluation only]
+When an OCEL is replayed as a stream, items are ordered by timestamp, ties by
+kind (events, attribute updates, O2O updates) and then by identifier. O2O
+relations carry no timestamp in OCEL~2.0; each is placed at the first event of
+its source object, as in~\cite{Liss2025}.
+\end{remark}
+
+% =============================================================================
+\section{Buffer-Based Streaming Framework}\label{sec:framework}
+% =============================================================================
+
+A streaming algorithm cannot keep everything it has seen. Everything an
+algorithm remembers is stored in buffers. Each buffer has an optional capacity
+and an eviction heuristic. Algorithms differ in what they store; eviction
+strategies differ only in their heuristic.
+
+\begin{definition}[Buffer]\label{def:buffer}
+A buffer $B = (K, V, c, H)$ stores values from $V \subseteq \Usigma$ under keys
+from $K \subseteq \Usigma$ (e.g.\ objects, arcs, activities). Its content is a
+partial map $b \colon K \rightharpoonup V$. The capacity is
+$c \in \mathbb{N} \cup \{\infty\}$ and $H$ is an eviction heuristic
+(Def.~\ref{def:heuristic}). For each key $k \in \dom(b)$ the buffer records
+its \emph{bookkeeping}: the position $f(k)$ of its first write, the position
+$l(k)$ of its last write, and its number of writes $n(k)$.
+\end{definition}
+
+\begin{definition}[Eviction heuristic]\label{def:heuristic}
+An \emph{eviction heuristic} $H = (\Theta, \theta_0, \score, \dl, \hupd)$
+consists of
+\begin{itemize}
+  \item a set of heuristic states $\Theta$ with initial state $\theta_0$;
+  \item a \emph{score} $\score(k, \sigma, \theta, i) \in \mathbb{R}$; a higher
+        score means ``evict sooner'';
+  \item a \emph{deadline} $\dl(k, \sigma, \theta, i) \in \mathbb{N} \cup \{\infty\}$,
+        the position at which $k$ should be evicted;
+  \item a \emph{state update} $\hupd(\theta, k, \mathit{op}, \sigma, i) \in \Theta$
+        applied whenever its buffer writes or evicts $k$, with
+        $\mathit{op} \in \{\mathit{write}\} \cup \{\mathit{evict}(r) \mid r \in \{\Rcap, \Rexp, \Rdis\}\}$.
+\end{itemize}
+A heuristic need not define both $\score$ and $\dl$; it supports
+\emph{capacity mode} if it defines $\score$ and \emph{expiry mode} if it
+defines $\dl$. Stateless heuristics have $|\Theta| = 1$.
+\end{definition}
+
+The heuristic state $\theta$ belongs to the heuristic, not to the algorithm, so
+any heuristic can be combined with any algorithm. It counts toward memory
+(Rem.~\ref{rem:memory}).
+
+\begin{definition}[Streaming algorithm]\label{def:algorithm}
+A \emph{streaming algorithm} $A = (\mathcal{B}, \upd, \fin, \lambda)$ consists
+of a tuple of buffers $\mathcal{B} = (B_1, \dots, B_n)$ and three functions on
+algorithm states $\sigma = (b_1, \dots, b_n)$, initially all empty:
+\begin{itemize}
+  \item $\upd(\sigma, s)$ processes item $s$ and returns the new state;
+        $\touched_j(s) \subseteq K_j$ are the keys of $B_j$ it \emph{reads or
+        writes};
+  \item $\fin(\sigma, j, k)$ is called after key $k$ was removed from $B_j$ and
+        returns the new state; it may change other buffers (e.g.\ record the
+        end activity of an evicted object, or discard dependent keys);
+        keys it writes are added to $\touched$;
+  \item $\lambda(\sigma)$ is the current model.
+\end{itemize}
+We require that the ``$\fin$ of $B_j$ writes to $B_l$'' relation is acyclic.
+\end{definition}
+
+\begin{definition}[Run]\label{def:run}
+Each buffer $B_j$ additionally keeps a schedule
+$d_j \colon \dom(b_j) \to \mathbb{N} \cup \{\infty\}$ (only if $H_j$ is in
+expiry mode). For each item $s_i$:
+\begin{enumerate}
+  \item \textbf{Update.} $\sigma \leftarrow \upd(\sigma, s_i)$. For every key
+        $k$ written in $B_j$: update its bookkeeping,
+        $\theta_j \leftarrow \hupd_j(\theta_j, k, \mathit{write}, \sigma, i)$,
+        and, in expiry mode, $d_j(k) \leftarrow \dl_j(k, \sigma, \theta_j, i)$.
+  \item \textbf{Evict} until no rule applies, buffers in order $j = 1, \dots, n$
+        and repeated as long as some $\fin$ wrote to an earlier buffer.
+        Let $C_j = \dom(b_j) \setminus \touched_j(s_i)$ be the candidates.
+        \begin{enumerate}
+          \item \emph{Expiry} (if $H_j$ is in expiry mode): while some
+                $k \in C_j$ has $d_j(k) \le i$, take the one with the smallest
+                $d_j(k)$ (ties: smallest $f(k)$) and set
+                $d' = \dl_j(k, \sigma, \theta_j, i)$.
+                If $d' > i$, reschedule $d_j(k) \leftarrow d'$;
+                otherwise evict $k$ with reason $\Rexp$.
+          \item \emph{Capacity} (if $c_j < \infty$): while
+                $|\dom(b_j)| > c_j$ and $C_j \neq \emptyset$, evict
+                $k^* = \arg\max_{k \in C_j} \score_j(k, \sigma, \theta_j, i)$
+                (ties: smallest $f(k)$) with reason $\Rcap$.
+        \end{enumerate}
+        \emph{Evicting} $k$ from $B_j$ with reason $r$ means: remove $k$ from
+        $b_j$ and $d_j$, then
+        $\sigma \leftarrow \fin(\sigma, j, k)$ and
+        $\theta_j \leftarrow \hupd_j(\theta_j, k, \mathit{evict}(r), \sigma, i)$.
+        An algorithm may also remove a key itself (reason $\Rdis$, e.g.\ from
+        $\fin$); this calls $\hupd_j$ but not $\fin$.
+\end{enumerate}
+The model after item $s_i$ is $\lambda(\sigma_i)$. The \emph{unbounded run}
+uses $c_j = \infty$ and no expiry for all buffers; it never evicts.
+\end{definition}
+
+The schedule realizes ``re-check when the deadline is reached'': a key is
+evicted no earlier than its scheduled deadline, and only if the deadline
+recomputed at that moment is not in the future. If a deadline \emph{shrinks}
+after it was scheduled, the key still waits until the old deadline. This is
+the semantics of~\cite{Muehlmeyer2026} and its reference implementation.
+
+Termination: step~2 terminates because every eviction removes a key that is
+not re-added in the same step (written keys are touched), and the $\fin$
+relation is acyclic.
+
+\begin{definition}[Premature eviction]\label{def:premature}
+A key $k$ evicted from $B_j$ at item $s_i$ is evicted \emph{too early} if
+$k \in \touched_j(s_{i'})$ for some $i' > i$.
+\end{definition}
+
+\begin{proposition}[Exactness]\label{prop:exact}
+Assume
+(i)~evicting a key commutes with processing any item that does not touch it, and
+(ii)~evicting a key does not change the current model,
+$\lambda(\fin(\sigma, j, k)) = \lambda(\sigma)$.
+If no key is evicted too early, the run yields the same model as the
+unbounded run.
+\end{proposition}
+\begin{proof}
+No later item touches an evicted key. By (i), every eviction can be moved
+step by step to the end of the run without changing the final state. By (ii),
+the evictions at the end do not change the model. What remains is the
+unbounded run.
+\end{proof}
+
+\begin{remark}[Where (i) and (ii) hold]\label{rem:exactness}
+(i) relies on $\touched$ containing read keys; all building blocks of
+Sec.~\ref{sec:blocks} only read keys they also write.
+(ii) holds for object buffers whose $\fin$ moves the object's contribution into
+the model (Def.~\ref{def:df}: its end activity). It fails for buffers that
+store the model itself: Löseke's arc observation log, and equally the counter
+buffers of Def.~\ref{def:df} when bounded. Bounding such buffers always costs
+accuracy; bounding object buffers costs accuracy only when the heuristic
+evicts too early.
+\end{remark}
+
+\begin{remark}[Memory]\label{rem:memory}
+After each item, $|\dom(b_j)| \le \max(c_j, |\touched_j(s_i)|)$ for every
+buffer; $c_j \ge \max_i |\touched_j(s_i)|$ (e.g.\ the maximal number of objects
+per event for an object buffer) gives $|\dom(b_j)| \le c_j$.
+Memory is bounded if every buffer whose size grows with the number of objects
+has a finite capacity and every heuristic state $\theta_j$ is bounded
+independently of the number of objects. Memory is measured in buffer entries.
+\end{remark}
+
+% =============================================================================
+\section{Building Blocks}\label{sec:blocks}
+% =============================================================================
+
+Blocks are reusable parts of algorithms. Each owns buffers and defines its
+share of $\upd$, $\fin$ and $\lambda$. Unless stated otherwise, consider an
+event item $s_i = ((a, R, A), t_i)$ with $O = \obj(x_i)$.
+
+\begin{definition}[Object tracker]\label{def:tracker}
+Buffer $B_{\mathit{obj}}$ with keys $\Uobj$ and values $\Uact$. On $s_i$, for
+each $o \in O$: emit $\mathit{transition}(o, b_{\mathit{obj}}(o), a)$ where
+$b_{\mathit{obj}}(o) = \bot$ if $o \notin \dom(b_{\mathit{obj}})$, then write
+$b_{\mathit{obj}}(o) \leftarrow a$. We write $\alast(o) = b_{\mathit{obj}}(o)$;
+$l(o)$ is the position of $o$'s last event. Evicting $o$ emits
+$\mathit{retired}(o, \alast(o))$.
+\end{definition}
+
+\begin{definition}[Directly-follows counters]\label{def:df}
+Buffers $B_{\mathit{arcs}}$ with keys $\Uact \times \Uact \times \Utype$,
+$B_{\mathit{start}}$ and $B_{\mathit{end}}$ with keys $\Uact \times \Utype$,
+values $\mathbb{N}$.
+$\mathit{transition}(o, \bot, a)$ increments $b_{\mathit{start}}(a, \otype(o))$;
+$\mathit{transition}(o, b, a)$ with $b \ne \bot$ increments
+$b_{\mathit{arcs}}(b, a, \otype(o))$;
+$\mathit{retired}(o, a)$ increments $b_{\mathit{end}}(a, \otype(o))$.
+The end activities of type $t$ are taken from \emph{all} objects:
+\[
+  \mathit{End}(a, t) = b_{\mathit{end}}(a, t) + |\{o \in \dom(b_{\mathit{obj}}) \mid \otype(o) = t, \alast(o) = a\}|.
+\]
+\end{definition}
+This is what makes Rem.~\ref{rem:exactness}(ii) hold for $B_{\mathit{obj}}$.
+(The Rust reference of~\cite{Muehlmeyer2026} uses only the second term.)
+
+\begin{definition}[Activity--type relations]\label{def:relations}
+Counters $N(a)$ (events of $a$), $N(a,t)$ (events of $a$ with
+$\proj{O}{t} \ne \emptyset$) and $N_{>1}(a,t)$ (events of $a$ with
+$|\proj{O}{t}| > 1$). Then
+$\mathit{rel} = \{(a,t) \mid N(a,t) > 0\}$,
+$\mathit{con} = \{(a,t) \mid N_{>1}(a,t) > 0\}$,
+$\mathit{def} = \{(a,t) \in \mathit{rel} \mid N(a,t) < N(a)\}$.
+\end{definition}
+
+\begin{definition}[Divergence index]\label{def:divergence}
+Let $h \colon 2^{\Uobj} \to \mathbb{Z}$ be a fast hash
+(implementation: Python \texttt{hash(frozenset(ids))}; collisions accepted).
+Buffer $B_{\mathit{div}}$ with keys $\Uact \times \Utype \times \mathbb{Z}$ and
+values $\mathbb{Z}$, and the set $\mathit{div} \subseteq \Uact \times \Utype$
+(part of the model, not a buffer). On $s_i$, for each type $t$ with
+$\proj{O}{t} \ne \emptyset$ and $(a,t) \notin \mathit{div}$, let
+$k = (a, t, h(\proj{O}{t}))$:
+if $k \in \dom(b_{\mathit{div}})$ and $b_{\mathit{div}}(k) \ne h(O)$, add
+$(a,t)$ to $\mathit{div}$ and discard all keys $(a, t, \cdot)$ (reason $\Rdis$);
+otherwise write $b_{\mathit{div}}(k) \leftarrow h(O)$.
+We write $\mathit{div}(a) = \{t \mid (a,t) \in \mathit{div}\}$.
+\end{definition}
+
+\begin{definition}[DF\textsuperscript{2} graph]\label{def:df2}
+From Defs.~\ref{def:df}--\ref{def:divergence}, the DF\textsuperscript{2} graph
+is $(\Sigma, E_\to, \Sigma_{\mathit{start}}, \Sigma_{\mathit{end}})$ with
+$\Sigma = \{a \mid N(a) > 0\}$ and
+\begin{align*}
+  E_\to &= \{(a,b) \mid \exists t \colon b_{\mathit{arcs}}(a,b,t) > 0 \wedge t \notin \mathit{div}(a) \cap \mathit{div}(b)\},\\
+  \Sigma_{\mathit{start}} &= \{a \mid \exists t \colon b_{\mathit{start}}(a,t) > 0 \wedge t \notin \mathit{div}(a)\},\\
+  \Sigma_{\mathit{end}} &= \{a \mid \exists t \colon \mathit{End}(a,t) > 0 \wedge t \notin \mathit{div}(a)\}.
+\end{align*}
+The divergence filter on start and end activities is a design decision; the
+offline reference applies the same filter.
+\end{definition}
+
+\begin{definition}[OCPT discovery]\label{def:ocpt}
+A \emph{cut miner} maps a DF\textsuperscript{2} graph to an object-centric
+process tree. The default cut miner tries the cuts xor, sequence,
+concurrency and loop in this order, recursing on the parts. If no cut applies
+to an activity set $X$ with $|X| > 1$, it returns the node
+$\mathit{NoCut}(X)$; there is no fallback. Each leaf $a$ is annotated with
+$(a, \mathit{rel}(a), \mathit{con}(a), \mathit{div}(a), \mathit{def}(a))$
+from Defs.~\ref{def:relations} and~\ref{def:divergence}.
+TODO(WP4): state the cut conditions as implemented.
+\end{definition}
+
+% TODO(WP7): Liss et al. building blocks — arc observation log
+%   (key: fresh id; value (b|⊥, a, t, o, 1/|O⇂t|, duration)), relation log,
+%   object interactions (log and event cardinalities), TOTeM construction,
+%   coupled removal.
+
+% =============================================================================
+\section{Eviction Heuristics}\label{sec:heuristics}
+% =============================================================================
+
+Stateless heuristics, using the bookkeeping of Def.~\ref{def:buffer}
+(capacity mode):
+\begin{align*}
+  \text{FIFO: } & \score(k) = i - f(k) &
+  \text{LIFO: } & \score(k) = f(k) \\
+  \text{LRU: } & \score(k) = i - l(k) &
+  \text{LFU: } & \score(k) = -n(k) \\
+  \text{Random: } & \score(k) \sim U(0,1) \text{ (seeded)}
+\end{align*}
+Max age (expiry mode), with age limit $T$: $\dl(k) = l(k) + T$.
+
+\begin{definition}[Lifecycle heuristic~\cite{Muehlmeyer2026}]\label{def:lifecycle}
+For an object buffer (Def.~\ref{def:tracker}), with parameters
+$0 \le T_{\mathit{hint}} < T_{\mathit{max}}$,
+$z = 1$ and $\beta = 0.95$.
+The state is an end-activity histogram $\theta = (\kappa, \nu)$ with
+$\kappa \colon \Uact \times \Utype \to \mathbb{N}$ and
+$\nu \colon \Utype \to \mathbb{N}$, initially zero.
+For $k = \kappa(a,t)$ and $n = \nu(t)$, the confidence that $a$ ends the
+lifecycle of an object of type $t$ is
+\[
+  C(a,t) = \begin{cases}
+    0 & n = 0\\
+    \max(0, \mu - z s) & \text{otherwise}
+  \end{cases}
+  \quad
+  \mu = \frac{k+1}{n+2},\;
+  s = \sqrt{\frac{(k+1)(n-k+1)}{(n+2)^2(n+3)}},
+\]
+and the \emph{eviction age}
+\[
+  \alpha(a,t) = \begin{cases}
+    T_{\mathit{max}} & C(a,t) \le 0\\
+    T_{\mathit{hint}} + 1 & C(a,t) \ge 0.9999\\
+    T_{\mathit{hint}} + \bigl\lceil (T_{\mathit{max}} - T_{\mathit{hint}}) \cdot \beta^{C/(1-C)} \bigr\rceil & \text{otherwise.}
+  \end{cases}
+\]
+With $\Delta(o) = i - l(o)$:
+\begin{itemize}
+  \item deadline: $\dl(o) = l(o) + \alpha(\alast(o), \otype(o))$;
+  \item state update on $\mathit{evict}(r)$ of $o$ at position $i$: if
+        $r = \Rcap$, or $r = \Rexp$ and $\Delta(o) \ge T_{\mathit{max}}$, then
+        $\kappa(\alast(o), \otype(o)) \mathrel{+}= 1$ and
+        $\nu(\otype(o)) \mathrel{+}= 1$;
+  \item no score: in this version the heuristic supports expiry mode only.
+\end{itemize}
+\end{definition}
+
+This is the heuristic of~\cite{Muehlmeyer2026}, checked after every item.
+(The Rust reference batches its checks every $10\,000$ events; we do not.)
+The divergence index of the online OCPT miner uses max age with
+$T = T_{\mathit{max}}$.
+Counting capacity evictions in the histogram has no effect while the object
+buffer is unbounded; it fixes the semantics for later heuristics that combine
+the lifecycle schedule with a fixed capacity.
+
+% TODO(WP6): LFU-DA, the eight priority features of Liss et al.,
+%   min-max normalized rank combination (weighted heuristic).
