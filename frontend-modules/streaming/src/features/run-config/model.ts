@@ -64,6 +64,8 @@ export type RunFormState = {
   buffers: Record<string, BufferFormState>;
   name: string;
   preset: string | null;
+  /** Whether `name` was filled in by a preset rather than typed by the user. */
+  nameFromPreset: boolean;
   monitorBuffers: boolean;
 };
 
@@ -113,6 +115,7 @@ export function initialRunForm(algorithm: AlgorithmInfo): RunFormState {
     buffers: Object.fromEntries(algorithm.buffers.map((buffer) => [buffer.name, unboundedBuffer()])),
     name: "",
     preset: null,
+    nameFromPreset: false,
     monitorBuffers: false,
   };
 }
@@ -120,7 +123,12 @@ export function initialRunForm(algorithm: AlgorithmInfo): RunFormState {
 export function runFormReducer(state: RunFormState, action: RunFormAction): RunFormState {
   switch (action.type) {
     case "selectAlgorithm":
-      return { ...initialRunForm(action.algorithm), name: state.name, monitorBuffers: state.monitorBuffers };
+      // A preset's name no longer describes the run once another model is chosen.
+      return {
+        ...initialRunForm(action.algorithm),
+        name: state.nameFromPreset ? "" : state.name,
+        monitorBuffers: state.monitorBuffers,
+      };
     case "applyPreset": {
       const initial = initialRunForm(action.algorithm);
       const buffers = { ...initial.buffers };
@@ -133,6 +141,7 @@ export function runFormReducer(state: RunFormState, action: RunFormAction): RunF
         stream: action.preset.stream ? streamOf(action.preset.stream) : initial.stream,
         buffers,
         name: action.preset.label,
+        nameFromPreset: true,
         preset: action.preset.key,
         monitorBuffers: state.monitorBuffers,
       };
@@ -157,7 +166,7 @@ export function runFormReducer(state: RunFormState, action: RunFormAction): RunF
         },
       });
     case "setName":
-      return { ...state, name: action.name };
+      return { ...state, name: action.name, nameFromPreset: false };
     case "setMonitorBuffers":
       return { ...state, monitorBuffers: action.monitorBuffers };
   }
