@@ -241,20 +241,21 @@ share of $\upd$, $\fin$ and $\lambda$. Unless stated otherwise, consider an
 event item $s_i = ((a, R, A), t_i)$ with $O = \obj(x_i)$.
 
 \begin{definition}[Object tracker]\label{def:tracker}
-Buffer $B_{\mathit{obj}}$ with keys $\Uobj$ and values $\Uact$. On $s_i$, for
-each $o \in O$: emit $\mathit{transition}(o, b_{\mathit{obj}}(o), a)$ where
-$b_{\mathit{obj}}(o) = \bot$ if $o \notin \dom(b_{\mathit{obj}})$, then write
-$b_{\mathit{obj}}(o) \leftarrow a$. We write $\alast(o) = b_{\mathit{obj}}(o)$;
-$l(o)$ is the position of $o$'s last event. Evicting $o$ emits
-$\mathit{retired}(o, \alast(o))$.
+Buffer $B_{\mathit{obj}}$ with keys $\Uobj$ and values $\Uact \times \Utime$
+(last activity and its timestamp). On $s_i$, for each $o \in O$ (in relation
+order): emit $\mathit{transition}(o, b, t', a, t_i, |\proj{O}{\otype(o)}|)$ where
+$(b, t') = b_{\mathit{obj}}(o)$, or $(\bot, \bot)$ if $o \notin \dom(b_{\mathit{obj}})$,
+then write $b_{\mathit{obj}}(o) \leftarrow (a, t_i)$. We write $\alast(o)$ for
+the activity in $b_{\mathit{obj}}(o)$; $l(o)$ is the position of $o$'s last
+event. Evicting $o$ emits $\mathit{retired}(o, \alast(o))$.
 \end{definition}
 
 \begin{definition}[Directly-follows counters]\label{def:df}
 Buffers $B_{\mathit{arcs}}$ with keys $\Uact \times \Uact \times \Utype$,
 $B_{\mathit{start}}$ and $B_{\mathit{end}}$ with keys $\Uact \times \Utype$,
 values $\mathbb{N}$.
-$\mathit{transition}(o, \bot, a)$ increments $b_{\mathit{start}}(a, \otype(o))$;
-$\mathit{transition}(o, b, a)$ with $b \ne \bot$ increments
+$\mathit{transition}(o, \bot, \cdot, a, \cdot, \cdot)$ increments $b_{\mathit{start}}(a, \otype(o))$;
+$\mathit{transition}(o, b, \cdot, a, \cdot, \cdot)$ with $b \ne \bot$ increments
 $b_{\mathit{arcs}}(b, a, \otype(o))$;
 $\mathit{retired}(o, a)$ increments $b_{\mathit{end}}(a, \otype(o))$.
 The end activities of type $t$ are taken from \emph{all} objects:
@@ -266,7 +267,8 @@ This is what makes Rem.~\ref{rem:exactness}(ii) hold for $B_{\mathit{obj}}$.
 (The Rust reference of~\cite{Muehlmeyer2026} uses only the second term.)
 
 \begin{definition}[Activity--type relations]\label{def:relations}
-Counters $N(a)$ (events of $a$), $N(a,t)$ (events of $a$ with
+Buffers $B_{\mathit{act}}$ (keys $\Uact$) and $B_{\mathit{rel}}$ (keys
+$\Uact \times \Utype$) hold the counters $N(a)$ (events of $a$), $N(a,t)$ (events of $a$ with
 $\proj{O}{t} \ne \emptyset$) and $N_{>1}(a,t)$ (events of $a$ with
 $|\proj{O}{t}| > 1$). Then
 $\mathit{rel} = \{(a,t) \mid N(a,t) > 0\}$,
