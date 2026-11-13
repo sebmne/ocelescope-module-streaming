@@ -1,5 +1,11 @@
-"""Built-in streaming algorithms. Importing this package registers them in the catalog."""
+"""Streaming algorithms, one per file. Register new ones in `ALGORITHMS`."""
 
-from ocelescope_module_streaming.algorithms.ocdfg import StreamingOCDFG, compare_ocdfgs
+from typing import Any
 
-__all__ = ["StreamingOCDFG", "compare_ocdfgs"]
+from ocelescope_module_streaming.algorithms.algorithm import StreamingAlgorithm
+from ocelescope_module_streaming.algorithms.events import Finished, ItemProcessed, RunEvent
+from ocelescope_module_streaming.algorithms.observer import Observer
+
+ALGORITHMS: dict[str, type[StreamingAlgorithm[Any]]] = {}
+
+__all__ = ["ALGORITHMS", "Finished", "ItemProcessed", "Observer", "RunEvent", "StreamingAlgorithm"]

@@ -1,28 +1,17 @@
-"""Stream item types.
+"""Object-centric event streams: items s = (x, t), where x is an event, an O2O update or an
+attribute update."""
 
-A stream item is a pair ``(x, t)``: the content ``x`` (an event, an object-to-object update or an
-attribute update) and its timestamp ``t``. Items are ordered by their position in the stream,
-so items with equal timestamps remain ordered. Items carry no identifiers.
-
-The types are frozen dataclasses rather than pydantic models to keep per-item overhead low.
-"""
-
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import NamedTuple
 
-AttributeValue = str | int | float | bool | datetime
+Value = str | int | float | bool | datetime | None
 
 
 @dataclass(frozen=True, slots=True)
 class ObjectRef:
-    """A reference to an object and its type.
-
-    Attributes:
-        id: The object identifier.
-        type: The object type.
-    """
+    """An object and its type."""
 
     id: str
     type: str
@@ -30,12 +19,7 @@ class ObjectRef:
 
 @dataclass(frozen=True, slots=True)
 class Relation:
-    """An event-to-object (E2O) relation.
-
-    Attributes:
-        object: The related object.
-        qualifier: The qualifier of the relation, if any.
-    """
+    """A typed, optionally qualified E2O relation."""
 
     object: ObjectRef
     qualifier: str | None = None
@@ -43,77 +27,46 @@ class Relation:
 
 @dataclass(frozen=True, slots=True)
 class Event:
-    """An event item.
-
-    Attributes:
-        activity: The activity of the event.
-        relations: The E2O relations of the event.
-        attributes: The event attributes. Attributes without a value are omitted. Excluded from
-            hashing; must not be mutated.
-    """
+    """An event x = (a, R, A): activity, E2O relations and attributes (only those with a value)."""
 
     activity: str
     relations: tuple[Relation, ...]
-    attributes: Mapping[str, AttributeValue] = field(default_factory=dict, hash=False)
+    attributes: Mapping[str, Value] = field(default_factory=dict, hash=False)
 
     @property
     def objects(self) -> tuple[ObjectRef, ...]:
-        """The objects the event relates to, in relation order."""
-        return tuple(relation.object for relation in self.relations)
+        """The related objects, each once, in relation order."""
+        return tuple(dict.fromkeys(relation.object for relation in self.relations))
 
 
 @dataclass(frozen=True, slots=True)
 class O2OUpdate:
-    """An object-to-object (O2O) update relating a source object to a target object.
-
-    Attributes:
-        source: The source object.
-        target: The target object.
-        qualifier: The qualifier of the relation, if any.
-    """
+    """Object `source` is related to object `target`."""
 
     source: ObjectRef
     target: ObjectRef
     qualifier: str | None = None
 
-    @property
-    def objects(self) -> tuple[ObjectRef, ...]:
-        """The source and the target object."""
-        return (self.source, self.target)
-
 
 @dataclass(frozen=True, slots=True)
 class AttributeUpdate:
-    """An update that sets an attribute of an object.
-
-    Attributes:
-        object: The updated object.
-        attribute: The name of the attribute.
-        value: The new value, or None if the attribute is cleared.
-    """
+    """Attribute `attribute` of `object` takes the value `value`."""
 
     object: ObjectRef
     attribute: str
-    value: AttributeValue | None
-
-    @property
-    def objects(self) -> tuple[ObjectRef, ...]:
-        """The updated object."""
-        return (self.object,)
+    value: Value
 
 
 Content = Event | O2OUpdate | AttributeUpdate
+ItemKind = type[Event] | type[O2OUpdate] | type[AttributeUpdate]
 
 
 class StreamItem(NamedTuple):
-    """A stream item ``(x, t)``.
-
-    Supports unpacking, e.g. ``for x, t in stream``.
-
-    Attributes:
-        x: The content of the item.
-        t: The timestamp of the item.
-    """
+    """A stream item (x, t). Unpacks as `for x, t in stream`."""
 
     x: Content
     t: datetime
+
+
+Stream = Iterator[StreamItem]
+"""A stream: consumed once, front to back, possibly infinite."""

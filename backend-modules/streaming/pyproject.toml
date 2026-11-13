@@ -29,14 +29,6 @@ extend-exclude = ["*.md"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
-[tool.ruff.lint.flake8-bugbear]
-# frozen dataclasses: safe as argument defaults
-extend-immutable-calls = [
-  "ocelescope_module_streaming.stream.StreamOptions",
-  "ocelescope_module_streaming.stream.options.StreamOptions",
-  "ocelescope_module_streaming.framework.BufferConfig",
-  "ocelescope_module_streaming.framework.buffer.BufferConfig",
-]
 
 [tool.pyright]
 include = ["src", "tests"]
