@@ -16,7 +16,7 @@ class Progress(Observer):
         self.check_every = check_every
         self.processed = 0
 
-    def notify(self, algorithm: StreamingAlgorithm[Any], event: RunEvent) -> None:
+    def notify(self, algorithm: StreamingAlgorithm[Any, Any], event: RunEvent) -> None:
         if isinstance(event, ItemProcessed):
             self.processed = event.position
             if event.position % self.check_every == 0 and self.stop.is_set():

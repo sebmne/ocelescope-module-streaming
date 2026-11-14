@@ -14,5 +14,5 @@ class Observer(Protocol):
     current model, from the algorithm.
     """
 
-    def notify(self, algorithm: "StreamingAlgorithm[Any]", event: "RunEvent") -> None:
+    def notify(self, algorithm: "StreamingAlgorithm[Any, Any]", event: "RunEvent") -> None:
         """Called for every event of `algorithm`."""

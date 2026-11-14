@@ -4,15 +4,21 @@ from abc import ABC, abstractmethod
 from typing import ClassVar, Generic, TypeVar
 
 from ocelescope import Resource
+from pydantic import BaseModel
 
 from ocelescope_module_streaming.algorithms.events import Finished, ItemProcessed, RunEvent
 from ocelescope_module_streaming.algorithms.observer import Observer
 from ocelescope_module_streaming.stream import Event, ItemKind, Stream
 
+C = TypeVar("C", bound=BaseModel)
 M = TypeVar("M", bound=Resource)
 
 
-class StreamingAlgorithm(ABC, Generic[M]):
+class NoConfig(BaseModel):
+    """The configuration of an algorithm without settings."""
+
+
+class StreamingAlgorithm(ABC, Generic[C, M]):
     """Consumes a stream once and returns the discovered model; the subject of its observers.
 
     `run` is fixed: it sends `ItemProcessed` after every item and `Finished` at the end, so
@@ -20,15 +26,21 @@ class StreamingAlgorithm(ABC, Generic[M]):
     loop in `consume`, send their own events with `notify`, and return the current model from
     `model`. Models are Ocelescope resources, so runs can store and visualize them.
 
+    Each algorithm declares its settings as a pydantic model `C`; clients receive its JSON schema
+    and send a matching configuration, which is validated into an instance before construction.
+
     Attributes:
         label: The name shown to users.
-        kinds: The item kinds the algorithm reads; sources replay only these by default.
+        config_model: The settings model `C`, whose JSON schema clients use to configure a run.
+        kinds: The item kinds the algorithm reads; sources replay only these.
     """
 
     label: ClassVar[str]
+    config_model: ClassVar[type[BaseModel]] = NoConfig
     kinds: ClassVar[tuple[ItemKind, ...]] = (Event,)
 
-    def __init__(self) -> None:
+    def __init__(self, config: C) -> None:
+        self.config = config
         self._observers: list[Observer] = []
 
     def attach(self, observer: Observer) -> None:

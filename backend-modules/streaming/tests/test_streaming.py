@@ -7,12 +7,19 @@ from ocelescope import Resource
 from ocelescope_module_streaming.algorithms import (
     Finished,
     ItemProcessed,
+    NoConfig,
     Observer,
     RunEvent,
     StreamingAlgorithm,
 )
 from ocelescope_module_streaming.observers import Cancelled, Progress
-from ocelescope_module_streaming.stream import Event, ObjectRef, Relation, Stream, StreamItem
+from ocelescope_module_streaming.stream import (
+    Event,
+    ObjectRef,
+    Relation,
+    Stream,
+    StreamItem,
+)
 
 O1, O2, O3 = (ObjectRef(f"o{n}", "Order") for n in (1, 2, 3))
 
@@ -33,13 +40,13 @@ class Counts(Resource):
     counts: dict[str, int]
 
 
-class EventCounter(StreamingAlgorithm[Counts]):
+class EventCounter(StreamingAlgorithm[NoConfig, Counts]):
     """Test algorithm without buffers: counts events per activity in its own loop."""
 
     label = "Event counter"
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, config: NoConfig) -> None:
+        super().__init__(config)
         self.counts: dict[str, int] = {}
 
     def consume(self, stream: Stream) -> Counts:
@@ -59,7 +66,7 @@ class Recorder(Observer):
         self.events: list[RunEvent] = []
         self.models: list[Any] = []
 
-    def notify(self, algorithm: StreamingAlgorithm[Any], event: RunEvent) -> None:
+    def notify(self, algorithm: StreamingAlgorithm[Any, Any], event: RunEvent) -> None:
         self.events.append(event)
         if isinstance(event, ItemProcessed):
             self.models.append(algorithm.model())
@@ -69,7 +76,7 @@ class Recorder(Observer):
 
 
 def test_every_algorithm_reports_each_item_and_the_end_and_shows_its_model_in_between() -> None:
-    algorithm, recorder = EventCounter(), Recorder()
+    algorithm, recorder = EventCounter(NoConfig()), Recorder()
     algorithm.attach(recorder)
     model = algorithm.run(stream(("a", (O1,)), ("b", (O1,)), ("a", (O2,))))
     assert [type(e) for e in recorder.events] == [ItemProcessed, ItemProcessed, ItemProcessed, Finished]
@@ -80,7 +87,7 @@ def test_every_algorithm_reports_each_item_and_the_end_and_shows_its_model_in_be
 def test_a_run_can_be_cancelled() -> None:
     progress = Progress(check_every=1)
     progress.stop.set()
-    algorithm = EventCounter()
+    algorithm = EventCounter(NoConfig())
     algorithm.attach(progress)
     with pytest.raises(Cancelled):
         algorithm.run(stream(("a", (O1,)), ("b", (O1,))))

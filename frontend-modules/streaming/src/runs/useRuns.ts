@@ -1,18 +1,30 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { getListRunsQueryKey, type TaskState, useCancelRun, useListRuns } from "../api/streaming";
+import {
+  getListRunsQueryKey,
+  type RunSummary,
+  useCancelRun,
+  useDeleteRun,
+  useListRuns,
+  useStartRun,
+} from "../api/streaming";
 
-export const isActive = (state: TaskState) => state === "PENDING" || state === "STARTED";
+const POLL_MS = 500;
 
-/** The session's runs, newest first; refreshed every second while one is active. */
-export function useRuns() {
+export const isActive = ({ state }: RunSummary) => state === "PENDING" || state === "STARTED";
+
+/** The runs on `ocelId`, newest first; polled while one of them is active. */
+export function useRuns(ocelId: string | null) {
   return useListRuns({
-    query: { refetchInterval: (query) => (query.state.data?.some((run) => isActive(run.state)) ? 1000 : false) },
+    query: {
+      select: (runs) => runs.filter((run) => run.ocel_id === ocelId),
+      refetchInterval: ({ state }) => (state.data?.some(isActive) ? POLL_MS : false),
+    },
   });
 }
 
-export function useCancel() {
+/** Start, cancel and delete; each refreshes the run list. */
+export function useRunActions() {
   const queryClient = useQueryClient();
-  return useCancelRun({
-    mutation: { onSettled: () => queryClient.invalidateQueries({ queryKey: getListRunsQueryKey() }) },
-  });
+  const mutation = { onSettled: () => queryClient.invalidateQueries({ queryKey: getListRunsQueryKey() }) };
+  return { start: useStartRun({ mutation }), cancel: useCancelRun({ mutation }), remove: useDeleteRun({ mutation }) };
 }
