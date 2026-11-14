@@ -1,3 +1,4 @@
+from functools import partial
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -7,7 +8,7 @@ from ocelescope_backend.app.internal.exceptions import NotFound
 from pydantic import ValidationError
 
 from ocelescope_module_streaming.algorithms import ALGORITHMS
-from ocelescope_module_streaming.api.schemas import RunRequest, RunSummary
+from ocelescope_module_streaming.api.schemas import Frame, Layout, Pace, RunRequest, RunSummary
 from ocelescope_module_streaming.api.task import RunTask
 
 router = APIRouter(prefix="/runs", tags=["runs"])
@@ -36,7 +37,8 @@ def start_run(session: ApiSession, request: RunRequest) -> RunSummary:
     except NotFound as error:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Log {request.ocel_id} not found") from error
     name = request.name or f"{cls.label} on {log.name}"
-    task = RunTask(session, request.ocel_id, request.algorithm, cls(config), name, request.snapshot_every)
+    create = partial(cls, config)
+    task = RunTask(session, request.ocel_id, request.algorithm, create, name, request.pace, request.fixed_layout)
     session.tasks[task.id] = task
     task.start()
     return task.summarize()
@@ -54,6 +56,34 @@ def get_run(run: Run) -> RunSummary:
     return run.summarize()
 
 
+@router.get("/{run_id}/frame", operation_id="getRunFrame")
+def get_frame(run: Run) -> Frame:
+    """The latest frame of the run's model; while the run is active, it advances with every item."""
+    frame = run.live.frame
+    return Frame(position=frame.position, visualization=frame.visualization)
+
+
+@router.get("/{run_id}/layout", operation_id="getRunLayout")
+def get_layout(run: Run) -> Layout:
+    """The fixed layout's elements; empty until the first pass is done or without `fixed_layout`."""
+    return Layout(visualization=run.layout)
+
+
+@router.put("/{run_id}/pace", operation_id="setRunPace")
+def set_pace(run: Run, pace: Pace) -> RunSummary:
+    run.live.set_pace(pace.rate, pace.paused)
+    return run.summarize()
+
+
+@router.post("/{run_id}/step", operation_id="stepRun")
+def step_run(run: Run) -> RunSummary:
+    """Lets a paused run process one more item."""
+    if not run.live.paused:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Only paused runs can be stepped")
+    run.live.step()
+    return run.summarize()
+
+
 @router.post("/{run_id}/cancel", operation_id="cancelRun")
 def cancel_run(run: Run) -> RunSummary:
     if not run.active:
@@ -64,8 +94,7 @@ def cancel_run(run: Run) -> RunSummary:
 
 @router.delete("/{run_id}", operation_id="deleteRun", status_code=status.HTTP_204_NO_CONTENT)
 def delete_run(session: ApiSession, run: Run) -> None:
-    """Deletes the run and its snapshots; the final model stays a resource of the session."""
+    """Deletes the run; its final model stays a resource of the session."""
     if run.active:
         raise HTTPException(status.HTTP_409_CONFLICT, "Cancel the run before deleting it")
-    run.snapshot.clear()
     del session.tasks[run.id]

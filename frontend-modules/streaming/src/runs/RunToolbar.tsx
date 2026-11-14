@@ -14,11 +14,13 @@ type Props = {
   run: RunSummary | undefined;
   onStart: () => void;
   onCancel: () => void;
+  controls: React.ReactNode;
   children: React.ReactNode;
 };
 
-/** What to run and how far the shown run is; `children` go to the right end. */
-export function RunToolbar({ algorithms, algorithm, onAlgorithm, onSettings, run, onStart, onCancel, children }: Props) {
+/** What to run and how far the shown run is; `controls` follow the run button, `children` go to the right end. */
+export function RunToolbar(props: Props) {
+  const { algorithms, algorithm, onAlgorithm, onSettings, run, onStart, onCancel, controls, children } = props;
   const active = run !== undefined && isActive(run);
   return (
     <Group px="md" py="xs" gap="sm" wrap="nowrap" style={{ borderBottom: "1px solid var(--mantine-color-default-border)" }}>
@@ -46,11 +48,13 @@ export function RunToolbar({ algorithms, algorithm, onAlgorithm, onSettings, run
           Run
         </Button>
       )}
+      {controls}
       <Group gap="sm" wrap="nowrap" flex={1} miw={0}>
         {run && (
           <>
             <Progress value={run.total ? (100 * run.processed) / run.total : 0} animated={active} w={200} />
             <Text size="sm" c="dimmed" truncate>
+              {run.phase === "layout" && "Preparing layout · "}
               {count.format(run.processed)} / {run.total === null ? "…" : count.format(run.total)} items
               {run.duration !== null && ` · ${run.duration.toFixed(2)} s`}
             </Text>

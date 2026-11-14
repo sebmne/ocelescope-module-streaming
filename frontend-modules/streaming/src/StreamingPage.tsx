@@ -2,11 +2,12 @@ import { Center, Loader, Stack } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { useCurrentOcel } from "@ocelescope/core";
 import { useState } from "react";
-import { useListAlgorithms } from "./api/streaming";
+import { type Pace, useListAlgorithms } from "./api/streaming";
+import { PaceControls } from "./runs/PaceControls";
 import { RunModel } from "./runs/RunModel";
 import { RunsMenu } from "./runs/RunsMenu";
 import { RunToolbar } from "./runs/RunToolbar";
-import { useRunActions, useRuns } from "./runs/useRuns";
+import { isActive, useRunActions, useRuns } from "./runs/useRuns";
 import { defaults, type Values } from "./settings/schema";
 import { SettingsDrawer } from "./settings/SettingsDrawer";
 
@@ -20,6 +21,7 @@ export default function StreamingPage() {
   const [algorithmKey, setAlgorithmKey] = useState<string>();
   const [values, setValues] = useState<Record<string, Values>>({});
   const [selectedId, setSelectedId] = useState<string>();
+  const [pace, setPace] = useState<Pace>({ rate: 25, paused: false });
 
   if (!algorithms.data || !runs.data) {
     return (
@@ -36,9 +38,16 @@ export default function StreamingPage() {
     algorithm &&
     ocelId &&
     actions.start.mutate(
-      { data: { ocel_id: ocelId, algorithm: algorithm.key, config } },
+      // Watched runs get a fixed layout, which costs one extra pass at full speed.
+      { data: { ocel_id: ocelId, algorithm: algorithm.key, config, pace, fixed_layout: pace.paused || pace.rate != null } },
       { onSuccess: (started) => setSelectedId(started.id) },
     );
+
+  const active = run !== undefined && isActive(run);
+  const changePace = (next: Pace) => {
+    setPace(next);
+    if (run && active) actions.pace.mutate({ runId: run.id, data: next });
+  };
 
   return (
     <Stack h="100%" gap={0}>
@@ -50,6 +59,13 @@ export default function StreamingPage() {
         run={run}
         onStart={start}
         onCancel={() => run && actions.cancel.mutate({ runId: run.id })}
+        controls={
+          <PaceControls
+            pace={pace}
+            onPace={changePace}
+            onStep={run && active && pace.paused ? () => actions.step.mutate({ runId: run.id }) : undefined}
+          />
+        }
       >
         <RunsMenu
           runs={runs.data}

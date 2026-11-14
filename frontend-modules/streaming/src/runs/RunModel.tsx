@@ -1,10 +1,17 @@
-import { Alert, Center, Stack, Text } from "@mantine/core";
-import { ResourceViewer } from "@ocelescope/resources";
+import { Alert, Center, Loader, Text } from "@mantine/core";
+import { Visualization } from "@ocelescope/resources";
+import type { ComponentProps } from "react";
 import type { RunSummary } from "../api/streaming";
+import LiveGraph from "../graph";
+import { useFrame, useLayout } from "./useRuns";
 
-/** The run's final model, or its latest snapshot while running or after a cancel. */
+type VisualizationData = ComponentProps<typeof Visualization>["visualization"];
+
+/** The run's model as it stands after the latest item. */
 export function RunModel({ run }: { run: RunSummary | undefined }) {
-  if (!run) return <Hint>Choose an algorithm and start a run. Its model appears here as it grows.</Hint>;
+  const frame = useFrame(run);
+  const layout = useLayout(run);
+  if (!run) return <Hint>Choose an algorithm and start a run. Its model appears here item by item.</Hint>;
   if (run.error) {
     return (
       <Center h="100%" p="md">
@@ -14,20 +21,26 @@ export function RunModel({ run }: { run: RunSummary | undefined }) {
       </Center>
     );
   }
-  const id = run.result_id ?? run.snapshot_id;
-  if (!id) return <Hint>{run.state === "CANCELLED" ? "Cancelled before the first snapshot." : "Waiting for the first snapshot…"}</Hint>;
-  return (
-    <Stack h="100%" gap={0}>
-      {run.state === "CANCELLED" && (
-        <Text size="xs" c="dimmed" px="md" py={4}>
-          Cancelled: showing the last snapshot.
-        </Text>
-      )}
-      <div style={{ flex: 1, minHeight: 0 }}>
-        <ResourceViewer id={id} />
-      </div>
-    </Stack>
-  );
+  if (run.phase === "layout") {
+    return <Hint>Preparing the layout: the algorithm runs once at full speed, so every element gets its final place.</Hint>;
+  }
+  if (!frame.data || layout.isPending) {
+    return (
+      <Center h="100%">
+        <Loader />
+      </Center>
+    );
+  }
+  if (!frame.data.visualization) {
+    return <Hint>{frame.data.position === 0 ? "Waiting for the first item…" : "This model has no visualization."}</Hint>;
+  }
+  const visualization = frame.data.visualization as VisualizationData;
+  // Graphs go to our copy of Ocelescope's graph viewer, which keeps up with a changing model.
+  if (visualization.type === "graph") {
+    const fixed = layout.data?.visualization as Extract<VisualizationData, { type: "graph" }> | null | undefined;
+    return <LiveGraph key={run.id} visualization={visualization} layout={fixed ?? undefined} />;
+  }
+  return <Visualization visualization={visualization} />;
 }
 
 function Hint({ children }: { children: string }) {
