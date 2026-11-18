@@ -7,6 +7,16 @@ from ocelescope_backend.app.internal.tasks.base import TaskSummary
 from pydantic import BaseModel, Field
 
 
+class BufferInfo(BaseModel):
+    """A buffer of an algorithm; sinks are always unbounded."""
+
+    key: str
+    label: str
+    sink: bool
+    heuristics: list[str]
+    """Keys of the heuristics that suit the buffer."""
+
+
 class AlgorithmInfo(BaseModel):
     """An algorithm clients can run."""
 
@@ -14,6 +24,25 @@ class AlgorithmInfo(BaseModel):
     label: str
     config_schema: dict[str, Any]
     """JSON schema of the algorithm's configuration."""
+    buffers: list[BufferInfo]
+    """The algorithm's buffers in eviction order; empty unless it is buffer-based."""
+
+
+class HeuristicInfo(BaseModel):
+    """A heuristic buffers can evict by."""
+
+    key: str
+    label: str
+    parameters_schema: dict[str, Any]
+    """JSON schema of the heuristic's parameters."""
+
+
+class BufferBound(BaseModel):
+    """The capacity and heuristic of a bounded buffer."""
+
+    capacity: int = Field(ge=1)
+    heuristic: str
+    parameters: dict[str, Any] = Field(default_factory=dict)
 
 
 class Pace(BaseModel):
@@ -29,6 +58,8 @@ class RunRequest(BaseModel):
     ocel_id: str
     algorithm: str
     config: dict[str, Any] = Field(default_factory=dict)
+    buffers: dict[str, BufferBound] = Field(default_factory=dict)
+    """The bounded buffers by key; all others are unbounded."""
     name: str | None = None
     pace: Pace = Field(default_factory=Pace)
     fixed_layout: bool = False

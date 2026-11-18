@@ -100,3 +100,37 @@ def test_a_fixed_layout_run_first_runs_a_full_pass(client: TestClient, session: 
     run = wait(client, client.post("/runs", json=request).json()["id"])
     assert run["state"] == "SUCCESS" and run["phase"] == "replay" and run["processed"] == run["total"]
     assert client.get(f"/runs/{run['id']}/layout").json() == {"visualization": None}  # counts have no graph
+
+
+def test_buffer_algorithms_list_their_buffers_and_heuristics(client: TestClient) -> None:
+    df = {a["key"]: a for a in client.get("/algorithms").json()}["df"]
+    assert [(b["key"], b["sink"]) for b in df["buffers"]] == [
+        ("objects", False),
+        ("arcs", False),
+        ("starts", False),
+        ("ends", True),
+    ]
+    assert "lifecycle" in df["buffers"][0]["heuristics"] and "lifecycle" not in df["buffers"][1]["heuristics"]
+    heuristics = {h["key"]: h for h in client.get("/heuristics").json()}
+    assert "seed" in heuristics["random"]["parameters_schema"]["properties"]
+
+
+def test_a_bounded_run_keeps_its_buffers_within_capacity(client: TestClient, session: Session) -> None:
+    ocel_id = session.add_ocel(LOG, "container")
+    bound = {"capacity": 500, "heuristic": "lifecycle", "parameters": {"t_int": 10, "t_max": 100}}
+    started = client.post("/runs", json={"ocel_id": ocel_id, "algorithm": "df", "buffers": {"objects": bound}})
+    assert started.status_code == 201
+    assert wait(client, started.json()["id"])["state"] == "SUCCESS"
+
+
+@pytest.mark.parametrize(
+    "buffers",
+    [
+        {"ends": {"capacity": 5, "heuristic": "lru"}},  # a sink
+        {"arcs": {"capacity": 5, "heuristic": "lifecycle"}},  # only for objects
+        {"objects": {"capacity": 5, "heuristic": "lifecycle", "parameters": {"t_int": 9, "t_max": 9}}},
+    ],
+)
+def test_invalid_buffers_are_rejected(client: TestClient, session: Session, buffers: dict) -> None:
+    ocel_id = session.add_ocel(LOG, "container")
+    assert client.post("/runs", json={"ocel_id": ocel_id, "algorithm": "df", "buffers": buffers}).status_code == 422

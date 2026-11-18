@@ -1,15 +1,18 @@
+from collections.abc import Callable
 from functools import partial
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.exceptions import RequestValidationError
 from ocelescope_backend.app.dependencies import ApiSession
 from ocelescope_backend.app.internal.exceptions import NotFound
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
-from ocelescope_module_streaming.algorithms import ALGORITHMS
-from ocelescope_module_streaming.api.schemas import Frame, Layout, Pace, RunRequest, RunSummary
+from ocelescope_module_streaming.algorithms import ALGORITHMS, StreamingAlgorithm
+from ocelescope_module_streaming.api.schemas import BufferBound, Frame, Layout, Pace, RunRequest, RunSummary
 from ocelescope_module_streaming.api.task import RunTask
+from ocelescope_module_streaming.framework import Bound, BufferAlgorithm
+from ocelescope_module_streaming.heuristics import GENERAL, HEURISTICS
 
 router = APIRouter(prefix="/runs", tags=["runs"])
 
@@ -32,16 +35,46 @@ def start_run(session: ApiSession, request: RunRequest) -> RunSummary:
     try:
         config = cls.config_model.model_validate(request.config)
         log = session.get_ocel(request.ocel_id)
+        create = _creator(cls, config, request.buffers)
+        create()  # fails early on invalid buffers
     except ValidationError as error:
         raise RequestValidationError(error.errors(), body=request.config) from error
+    except ValueError as error:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(error)) from error
     except NotFound as error:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Log {request.ocel_id} not found") from error
     name = request.name or f"{cls.label} on {log.name}"
-    create = partial(cls, config)
     task = RunTask(session, request.ocel_id, request.algorithm, create, name, request.pace, request.fixed_layout)
     session.tasks[task.id] = task
     task.start()
     return task.summarize()
+
+
+def _creator(
+    cls: type[StreamingAlgorithm[Any, Any]], config: BaseModel, buffers: dict[str, BufferBound]
+) -> Callable[[], StreamingAlgorithm[Any, Any]]:
+    """Creates fresh instances, each with its own heuristics, e.g. for the layout's first pass."""
+    if not issubclass(cls, BufferAlgorithm):
+        if buffers:
+            raise ValueError(f"{cls.label} has no buffers")
+        return partial(cls, config)
+    specs = {spec.key: spec for spec in cls.buffer_specs}
+    parameters = {}
+    for key, bound in buffers.items():
+        spec = specs.get(key)
+        if spec is None or spec.sink:
+            raise ValueError(f"{cls.label} has no bounded buffer {key}")
+        if bound.heuristic not in (*GENERAL, *spec.heuristics):
+            raise ValueError(f"Heuristic {bound.heuristic} does not suit {spec.label}")
+        parameters[key] = HEURISTICS[bound.heuristic].parameters_model.model_validate(bound.parameters)
+
+    def create() -> StreamingAlgorithm[Any, Any]:
+        bounds = {
+            key: Bound(bound.capacity, HEURISTICS[bound.heuristic](parameters[key])) for key, bound in buffers.items()
+        }
+        return cls(config, bounds)
+
+    return create
 
 
 @router.get("", operation_id="listRuns")

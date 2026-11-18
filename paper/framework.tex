@@ -1,0 +1,596 @@
+% ---------------------------------------------------------------------------
+% Framework chapter. Requires amsmath, amssymb, amsthm, booktabs, tikz.
+% The universes \Utime, \Uact, \Uobj, \Utype, \Uattr, \Uval, \Uqual are
+% assumed from the preliminaries; the macros below are only fallbacks.
+% ---------------------------------------------------------------------------
+\providecommand{\mi}[1]{\mathit{#1}}
+\providecommand{\la}{\langle}
+\providecommand{\ra}{\rangle}
+\providecommand{\Utime}{\mathcal{U}_{\mi{time}}}
+\providecommand{\Uact}{\mathcal{U}_{\mi{act}}}
+\providecommand{\Uobj}{\mathcal{U}_{\mi{obj}}}
+\providecommand{\Utype}{\mathcal{U}_{\mi{type}}}
+\providecommand{\Uattr}{\mathcal{U}_{\mi{attr}}}
+\providecommand{\Uval}{\mathcal{U}_{\mi{val}}}
+\providecommand{\Uqual}{\mathcal{U}_{\mi{qual}}}
+\providecommand{\Uev}{\mathcal{U}_{\mi{ev}}}
+\providecommand{\Uoo}{\mathcal{U}_{\mi{o2o}}}
+\providecommand{\Uau}{\mathcal{U}_{\mi{au}}}
+\providecommand{\Uitem}{\mathcal{U}_{\mi{item}}}
+\providecommand{\Umod}{\mathcal{U}_{\mi{model}}}
+\providecommand{\Uhist}{\mathcal{U}_{\mi{hist}}}
+\providecommand{\pfun}{\nrightarrow}
+\providecommand{\restr}{\mathord{\upharpoonright}}
+
+\section{A Buffer-Based Streaming Framework}
+\label{sec:framework}
+
+This section introduces a framework for object-centric streaming algorithms
+with bounded memory.
+The input is an object-centric event stream.
+The output is a process model after every stream item.
+Everything an algorithm remembers is stored in \emph{buffers}.
+Each buffer has a fixed capacity.
+When a buffer overflows, a \emph{heuristic} selects the key to evict.
+
+The framework separates two concerns.
+An \emph{algorithm} defines what is stored and how the model is computed.
+A \emph{configuration} defines how much is stored and what is evicted.
+The same algorithm can therefore be run with different capacities and
+heuristics, e.g., the cache policies of Liss et al.~\cite{Liss2025} or the
+lifecycle estimation of M\"uhlmeyer et al.~\cite{Muehlmeyer2026}.
+Figure~\ref{fig:framework} shows how one stream item is processed.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+    node distance=6mm and 6mm,
+    box/.style={draw, rounded corners, minimum height=8mm, align=center, font=\small},
+    lbl/.style={font=\footnotesize, align=center},
+    >=stealth]
+  \node[lbl] (item) {item\\$s_i$};
+  \node[box, right=of item] (upd) {$\mi{upd}$};
+  \node[box, right=of upd] (ev1) {evict $B_1$\\[-1pt]{\footnotesize $(c_1, h_1)$}};
+  \node[lbl, right=of ev1] (dots) {$\cdots$};
+  \node[box, right=of dots] (evn) {evict $B_n$\\[-1pt]{\footnotesize $(c_n, h_n)$}};
+  \node[lbl, right=of evn] (state) {state\\$q_i$};
+  \node[box, below=of state] (model) {$\mi{model}$};
+  \node[lbl, left=of model] (out) {model after $s_i$};
+  \node[lbl, above=7mm of upd] (prev) {state $q_{i-1}$};
+  \draw[->] (item) -- (upd);
+  \draw[->] (prev) -- (upd);
+  \draw[->] (upd) -- (ev1);
+  \draw[->] (ev1) -- (dots);
+  \draw[->] (dots) -- (evn);
+  \draw[->] (evn) -- (state);
+  \draw[->] (state) -- (model);
+  \draw[->] (model) -- (out);
+\end{tikzpicture}
+\caption{Processing of stream item $s_i$.
+The algorithm first updates its state with $\mi{upd}$.
+Then the buffers $B_1, \dots, B_n$ are handled in order.
+While buffer $B_j$ holds more than $c_j$ keys, heuristic $h_j$ selects a key
+and $\mi{fin}$ evicts it.
+Evicting a key may record information in later buffers.
+The resulting state $q_i$ yields the current model.
+The algorithm provides $\mi{upd}$, $\mi{fin}$, and $\mi{model}$; the
+configuration provides the capacities $c_j$ and heuristics $h_j$.}
+\label{fig:framework}
+\end{figure}
+
+\subsection{Object-Centric Event Streams}
+\label{sec:framework:streams}
+
+We use the following notation.
+$X \pfun Y$ is the set of partial functions from $X$ to $Y$.
+For $f \in X \pfun Y$, $f \oplus g$ updates $f$ with the pairs in $g$, and
+$f \restr X'$ restricts $f$ to $\mi{dom}(f) \cap X'$.
+For $b \in K \pfun \mathbb{N}$ and $k \in K$, we write $b[k] = b(k)$ if
+$k \in \mi{dom}(b)$ and $b[k] = 0$ otherwise.
+For a finite multiset $M$ over $K$, $b \uplus M$ adds the multiplicities of
+$M$ to $b$, i.e., $\mi{dom}(b \uplus M) = \mi{dom}(b) \cup \{k \in M\}$ and
+$(b \uplus M)(k) = b[k] + M(k)$.
+
+We adapt the object-centric event streams of Liss et al.~\cite{Liss2025}.
+In contrast to~\cite{Liss2025}, each position of the stream holds a single
+item.
+Simultaneous items follow each other with equal timestamps.
+
+\begin{definition}[Stream Item]
+\label{def:item}
+$\Uev = \Uact \times \mathcal{P}(\Uobj \times \Utype \times \Uqual) \times
+(\Uattr \pfun \Uval)$ is the universe of events,
+$\Uoo = \Uobj \times \Utype \times \Uqual \times \Uobj \times \Utype$ is the
+universe of object-to-object (O2O) updates, and
+$\Uau = \Uobj \times \Utype \times \Uattr \times \Uval$ is the universe of
+attribute updates.
+$\Uitem = (\Uev \cup \Uoo \cup \Uau) \times \Utime$ is the universe of
+stream items.
+An event $(a, R, d) \in \Uev$ has activity $a$, a finite set $R$ of
+qualified event-to-object relations, and attribute values $d$.
+
+Let $s = (x, t) \in \Uitem$.
+The typed objects of $s$ are
+\begin{itemize}
+  \item $\mi{tobj}(s) = \{(o, \mi{ot}) \mid \exists_{q \in \Uqual}\
+        (o, \mi{ot}, q) \in R\}$ if $x = (a, R, d) \in \Uev$,
+  \item $\mi{tobj}(s) = \{(o_1, \mi{ot}_1), (o_2, \mi{ot}_2)\}$ if
+        $x = (o_1, \mi{ot}_1, q, o_2, \mi{ot}_2) \in \Uoo$, and
+  \item $\mi{tobj}(s) = \{(o, \mi{ot})\}$ if
+        $x = (o, \mi{ot}, \mi{attr}, v) \in \Uau$.
+\end{itemize}
+The objects of $s$ are
+$\mi{obj}(s) = \{o \mid \exists_{\mi{ot} \in \Utype}\ (o, \mi{ot}) \in
+\mi{tobj}(s)\}$.
+\end{definition}
+
+\begin{definition}[Object-Centric Event Stream]
+\label{def:stream}
+An object-centric event stream is a finite or infinite sequence
+$S = \la s_1, s_2, \dots \ra$ of stream items $s_i = (x_i, t_i) \in \Uitem$.
+For $i \ge 1$, $S_{\le i} = \la s_1, \dots, s_i \ra$ is the prefix of $S$
+up to $s_i$.
+$S$ is well-formed if and only if
+\begin{enumerate}
+  \item[(i)] $t_i \le t_j$ for all $1 \le i \le j$, and
+  \item[(ii)] $\mi{ot} = \mi{ot}'$ for all $i, j \ge 1$, $o \in \Uobj$, and
+        $\mi{ot}, \mi{ot}' \in \Utype$ with $(o, \mi{ot}) \in \mi{tobj}(s_i)$
+        and $(o, \mi{ot}') \in \mi{tobj}(s_j)$.
+\end{enumerate}
+\end{definition}
+
+A prefix $S_{\le i}$ is the event data that an offline algorithm would
+receive after $s_i$, i.e., the materialized event log.
+
+\begin{example}[Running Example]
+\label{ex:running}
+Table~\ref{tab:log} shows an event log of an order-management process with
+the object types $\mi{order}$ and $\mi{item}$.
+An order is placed together with its items.
+Each item is picked, and the order is paid.
+Finally, the order is shipped together with its items.
+Orders $o_1$ and $o_2$ complete this lifecycle, while order $o_3$ and item
+$i_3$ are still in progress after the last event.
+Each event $e_i$ becomes the stream item $s_i = ((a_i, R_i, \emptyset), i)$
+with timestamp $i$, where $R_i$ relates the objects of $e_i$ with the
+qualifier $\mi{ref} \in \Uqual$, e.g.,
+\[
+  s_1 = \bigl((\mi{place}, \{(o_1, \mi{order}, \mi{ref}),
+  (i_1, \mi{item}, \mi{ref})\}, \emptyset),\ 1\bigr).
+\]
+The resulting stream $S_{\mi{ex}} = \la s_1, \dots, s_9 \ra$ is well-formed.
+\end{example}
+
+\begin{table}[t]
+\centering
+\caption{Event log of the running example.
+Event $e_i$ becomes stream item $s_i$ of the stream $S_{\mi{ex}}$.
+Activities are abbreviated as $\mi{place}$ (place order), $\mi{pick}$
+(pick item), $\mi{pay}$ (pay order), and $\mi{ship}$ (ship order).}
+\label{tab:log}
+\begin{tabular}{@{}clll@{}}
+\toprule
+Event & Activity & Orders & Items \\
+\midrule
+$e_1$ & $\mi{place}$ & $o_1$ & $i_1$ \\
+$e_2$ & $\mi{place}$ & $o_2$ & $i_2$ \\
+$e_3$ & $\mi{pick}$ & & $i_1$ \\
+$e_4$ & $\mi{pay}$ & $o_1$ & \\
+$e_5$ & $\mi{ship}$ & $o_1$ & $i_1$ \\
+$e_6$ & $\mi{pick}$ & & $i_2$ \\
+$e_7$ & $\mi{place}$ & $o_3$ & $i_3$ \\
+$e_8$ & $\mi{pay}$ & $o_2$ & \\
+$e_9$ & $\mi{ship}$ & $o_2$ & $i_2$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Streaming Algorithms}
+\label{sec:framework:algorithms}
+
+\begin{definition}[Buffer, State]
+\label{def:buffer}
+A buffer $B = (K, V)$ consists of a set of keys $K$ and a set of values $V$.
+Its content is a partial function $b \in K \pfun V$ with a finite domain.
+Let $B_1, \dots, B_n$ be buffers with $B_j = (K_j, V_j)$.
+$Q = (K_1 \pfun V_1) \times \dots \times (K_n \pfun V_n)$ is the set of
+states, restricted to contents with finite domains, and
+$q_\emptyset = (\emptyset, \dots, \emptyset)$ is the empty state.
+For $q = (b_1, \dots, b_n) \in Q$, $1 \le j \le n$, $k \in K_j$, and
+$v \in V_j$, $\mi{del}_j(q, k)$ is $q$ with $k$ removed from $b_j$, and
+$\mi{put}_j(q, k, v)$ is $q$ with $b_j(k) = v$.
+\end{definition}
+
+\begin{definition}[Streaming Algorithm]
+\label{def:algorithm}
+Let $\Umod$ be a universe of models.
+A streaming algorithm is a tuple
+$A = (B_1, \dots, B_n, \mi{upd}, \mi{fin}, \mi{model})$ where
+$B_1, \dots, B_n$ are buffers with states $Q$ and
+\begin{itemize}
+  \item $\mi{upd} \in Q \times \Uitem \rightarrow Q$ processes a stream item,
+  \item $\mi{fin}(q, j, k) \in Q$ evicts key $k \in \mi{dom}(b_j)$ from
+        buffer $B_j$ in state $q = (b_1, \dots, b_n)$, and
+  \item $\mi{model} \in Q \rightarrow \Umod$ yields the current model,
+\end{itemize}
+such that $\mi{fin}(q, j, k)$ and $\mi{del}_j(q, k)$ coincide on the buffers
+$B_1, \dots, B_j$.
+\end{definition}
+
+Evicting $k$ thus removes $k$ and leaves all earlier buffers unchanged.
+It may change later buffers, e.g., to record the last activity of an evicted
+object as an end activity.
+
+\begin{definition}[Used Keys]
+\label{def:used}
+Let $A = (B_1, \dots, B_n, \mi{upd}, \mi{fin}, \mi{model})$ be a streaming
+algorithm with states $Q$, let $q \in Q$, and let $s \in \Uitem$.
+The keys of $B_j$ used by $s$ in $q$ are
+\[
+  \mi{used}_j(q, s) = \{k \in K_j \mid k \in \mi{dom}(b_j')
+  \text{ with } \mi{upd}(\mi{del}_j(q, k), s) = (b_1', \dots, b_n')\}.
+\]
+\end{definition}
+
+An item uses a key if it would create the key if it were missing.
+For a missing key, being used means being created.
+For the algorithms in this paper, the used keys are exactly the keys that the
+item inserts, changes, or reads, e.g., the last activity of an object.
+Condition~(i) of Proposition~\ref{prop:correctness} requires this in general.
+We assume that $\mi{used}_j(q, s)$ is finite.
+
+\begin{example}[Streaming Directly-Follows Algorithm]
+\label{ex:dfg}
+The algorithm $A_{\mi{df}}$ discovers per object type the directly-follows
+arcs and the start and end activities.
+It is the directly-follows part of~\cite{Muehlmeyer2026}.
+It uses four buffers:
+\begin{itemize}
+  \item $B_1 = (\Uobj, \Utype \times \Uact)$ maps each object to its type and
+        last activity,
+  \item $B_2 = (\Uact \times \Uact \times \Utype, \mathbb{N})$ counts arcs,
+  \item $B_3 = (\Utype \times \Uact, \mathbb{N})$ counts start activities, and
+  \item $B_4 = (\Utype \times \Uact, \mathbb{N})$ counts the end activities
+        of evicted objects.
+\end{itemize}
+Let $q = (b_1, b_2, b_3, b_4) \in Q$ and let $s = ((a, R, d), t)$ be an event
+item with $T = \mi{tobj}(s)$.
+Then $\mi{upd}(q, s) = (b_1', b_2', b_3', b_4)$ with
+\begin{align*}
+  b_1' &= b_1 \oplus \{(o, (\mi{ot}, a)) \mid (o, \mi{ot}) \in T\},\\
+  b_2' &= b_2 \uplus [(a', a, \mi{ot}) \mid (o, \mi{ot}) \in T \ \wedge\
+          b_1(o) = (\mi{ot}, a')], \text{ and}\\
+  b_3' &= b_3 \uplus [(\mi{ot}, a) \mid (o, \mi{ot}) \in T \ \wedge\
+          o \notin \mi{dom}(b_1)].
+\end{align*}
+Other items are ignored, i.e., $\mi{upd}(q, s) = q$.
+Evicting an object records its last activity as an end activity:
+\[
+  \mi{fin}(q, 1, o) = \bigl(b_1 \restr (\mi{dom}(b_1) \setminus \{o\}),\
+  b_2,\ b_3,\ b_4 \uplus [b_1(o)]\bigr).
+\]
+For $j \in \{2, 3, 4\}$, $\mi{fin}(q, j, k) = \mi{del}_j(q, k)$.
+The model consists of the arcs, start activities, and end activities:
+\[
+  \mi{model}(q) = \bigl(\mi{dom}(b_2),\ \mi{dom}(b_3),\
+  \mi{dom}(b_4) \cup \mi{rng}(b_1)\bigr).
+\]
+The end activities of objects that are still buffered are read from $b_1$.
+For the running example, the state after $s_3$ without evictions is
+$q_3 = (b_1, b_2, b_3, \emptyset)$ with
+\begin{align*}
+  b_1 &= \{(o_1, (\mi{order}, \mi{place})), (o_2, (\mi{order}, \mi{place})),
+         (i_1, (\mi{item}, \mi{pick})), (i_2, (\mi{item}, \mi{place}))\},\\
+  b_2 &= \{((\mi{place}, \mi{pick}, \mi{item}), 1)\}, \text{ and }
+  b_3 = \{((\mi{order}, \mi{place}), 2), ((\mi{item}, \mi{place}), 2)\}.
+\end{align*}
+The stream item $s_4$ records the payment of $o_1$.
+It uses $\mi{used}_1(q_3, s_4) = \{o_1\}$ and
+$\mi{used}_2(q_3, s_4) = \{(\mi{place}, \mi{pay}, \mi{order})\}$, and no
+keys of $B_3$ and $B_4$.
+\end{example}
+
+\subsection{Bounded Runs}
+\label{sec:framework:runs}
+
+\begin{definition}[Heuristic, Configuration]
+\label{def:configuration}
+Let $A = (B_1, \dots, B_n, \mi{upd}, \mi{fin}, \mi{model})$ be a
+streaming algorithm with states $Q$.
+$\Uhist = (\Uitem \times Q)^*$ is the set of histories.
+A heuristic for buffer $B_j$ is a function $h \in K_j \times \Uhist
+\rightarrow \mathbb{R}$.
+The score $h(k, \eta)$ rates key $k$ in the last state of $\eta$.
+A higher score means that $k$ is evicted sooner.
+A configuration $C = ((c_1, h_1), \dots, (c_n, h_n))$ assigns to each buffer
+$B_j$ a capacity $c_j \in \mathbb{N} \cup \{\infty\}$ and a heuristic $h_j$.
+$C$ is unbounded if $c_j = \infty$ for all $1 \le j \le n$.
+$C$ fits a stream $S = \la s_1, s_2, \dots \ra$ if and only if
+$c_j \ge |\mi{used}_j(q, s_i)|$ for all $1 \le j \le n$, $q \in Q$, and
+$i \ge 1$.
+\end{definition}
+
+A heuristic may use, for each key $k$ of $B_j$, its insertion position
+$\mi{ins}_j^\eta(k)$, the position of its last use $\mi{last}_j^\eta(k)$, and
+its number of uses since insertion $\mi{freq}_j^\eta(k)$.
+These are derived from the history $\eta$
+(Definition~\ref{def:bookkeeping} in Appendix~\ref{app:framework}).
+A fitting configuration ensures that every single item of the stream fits
+into every buffer.
+For buffer $B_1$ of Example~\ref{ex:dfg}, the capacity must be at least the
+largest number of objects in an event of the stream.
+
+\begin{definition}[Run]
+\label{def:run}
+Let $S = \la s_1, s_2, \dots \ra$ be an object-centric event stream, let
+$A = (B_1, \dots, B_n, \mi{upd}, \mi{fin}, \mi{model})$ be a
+streaming algorithm with states $Q$, and let
+$C = ((c_1, h_1), \dots, (c_n, h_n))$ be a configuration that fits $S$.
+The run of $A$ on $S$ under $C$ is the sequence of states
+$\la q_0, q_1, \dots \ra$ with $q_0 = q_\emptyset$ and, for $i \ge 1$,
+\[
+  q_i = \mi{ev}_n^i(\dots \mi{ev}_1^i(\mi{upd}(q_{i-1}, s_i)) \dots).
+\]
+Let $\eta = \la (s_1, q_1), \dots, (s_{i-1}, q_{i-1}) \ra$.
+For $1 \le j \le n$ and $q = (b_1, \dots, b_n) \in Q$, let
+$\eta_q = \eta \cdot \la (s_i, q) \ra$ and
+\[
+  \mi{ev}_j^i(q) =
+  \begin{cases}
+    q & \text{if } |\mi{dom}(b_j)| \le c_j,\\
+    \mi{ev}_j^i(\mi{fin}(q, j, k^*)) & \text{otherwise,}
+  \end{cases}
+\]
+where $k^* \in \mi{dom}(b_j) \setminus \mi{used}_j(q_{i-1}, s_i)$ maximizes
+$h_j(k^*, \eta_q)$.
+Ties are broken by the smallest $\mi{ins}_j^{\eta_q}(k^*)$ and then by a fixed
+total order on $K_j$.
+The model after $s_i$ is $\mi{model}(q_i)$.
+The unbounded run of $A$ on $S$ is its run under an unbounded configuration.
+\end{definition}
+
+Each item is processed in two phases.
+First, $\mi{upd}$ processes the item.
+Then, each buffer evicts keys until it respects its capacity.
+Keys used by the current item are never evicted.
+Every eviction removes a key from $B_j$, and later evictions never insert into
+$B_j$.
+Hence, $B_j$ holds at most $c_j$ keys after every item.
+The unbounded run never evicts.
+
+Table~\ref{tab:heuristics} lists the cache replacement strategies and priority
+policies of Liss et al.~\cite{Liss2025} as heuristics.
+The lifecycle estimation of M\"uhlmeyer et al.~\cite{Muehlmeyer2026} evicts
+an object once its inactivity exceeds its expected remaining lifetime.
+We turn it into a heuristic that ranks objects by how far they exceed this
+lifetime.
+
+\begin{table}[t]
+\centering
+\caption{Cache replacement strategies and priority policies
+of~\cite{Liss2025} as heuristics for buffer $B_j$.
+Let $\eta \in \Uhist$ with $i = |\eta|$.
+For a function $f$ over the keys of $B_j$, $\hat{f}$ denotes its min-max
+normalization over the keys of $B_j$ in the last state of $\eta$, with
+$\hat{f} = 0$ if all keys have the same value.}
+\label{tab:heuristics}
+\begin{tabular}{@{}ll@{}}
+\toprule
+Strategy & Score $h(k, \eta)$ \\
+\midrule
+First in, first out (FIFO) & $i - \mi{ins}_j^\eta(k)$ \\
+Least recently used (LRU) & $i - \mi{last}_j^\eta(k)$ \\
+Least frequently used (LFU) & $-\mi{freq}_j^\eta(k)$ \\
+LFU with dynamic aging (LFU-DA) & $\hat{h}_{\mi{FIFO}}(k, \eta) +
+  \hat{h}_{\mi{LFU}}(k, \eta)$ \\
+Random replacement (RR) & independent and uniform in $[0, 1]$ \\
+Priority policy $p$ with weight $w \in [0, 1]$ &
+  $w \cdot \hat{h}(k, \eta) + (1 - w) \cdot \hat{p}(k, \eta)$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{definition}[Lifecycle Heuristic]
+\label{def:lifecycle}
+Let $A_{\mi{df}}$ be the algorithm of Example~\ref{ex:dfg}, let
+$T_{\mi{int}}, T_{\max} \in \mathbb{N}$ with $T_{\mi{int}} < T_{\max}$, and
+let $z > 0$.
+Let $\eta \in \Uhist$ with $i = |\eta|$ and last state
+$(b_1, b_2, b_3, b_4)$.
+For $o \in \mi{dom}(b_1)$ with $b_1(o) = (\mi{ot}, a)$, let
+$n = \sum_{a' \in \Uact} b_4[(\mi{ot}, a')]$ be the number of completed
+lifecycles of type $\mi{ot}$, let $n_a = b_4[(\mi{ot}, a)]$ be the number
+of those ending with $a$, and let
+\[
+  p = \frac{n_a + 1}{n + 2}, \qquad
+  v = \frac{(n_a + 1)(n - n_a + 1)}{(n + 2)^2 (n + 3)}, \qquad
+  \mi{conf}_\eta(o) = \max\bigl(0,\ p - z \sqrt{v}\bigr).
+\]
+The expected lifetime of $o$ is
+\[
+  \mi{life}_\eta(o) =
+  \begin{cases}
+    T_{\max} & \text{if } \mi{conf}_\eta(o) = 0,\\
+    T_{\mi{int}} + 1 & \text{if } \mi{conf}_\eta(o) \ge 0.9999,\\
+    T_{\mi{int}} + \bigl\lceil (T_{\max} - T_{\mi{int}}) \cdot
+      0.95^{\mi{conf}_\eta(o) / (1 - \mi{conf}_\eta(o))} \bigr\rceil
+      & \text{otherwise.}
+  \end{cases}
+\]
+The lifecycle heuristic for $B_1$ is
+\[
+  h_{\mi{LC}}(o, \eta) = \frac{i - \mi{last}_1^\eta(o)}{\mi{life}_\eta(o)}.
+\]
+\end{definition}
+
+The confidence $\mi{conf}_\eta(o)$ is the lower bound of the Beta-binomial
+credible interval used in~\cite{Muehlmeyer2026}.
+It estimates how likely the last activity of $o$ ends a lifecycle of its type.
+A score above~$1$ means that $o$ has been inactive for longer than expected.
+In contrast to~\cite{Muehlmeyer2026}, the thresholds do not trigger
+evictions, only the capacity does.
+As long as $b_4$ is empty, all objects have the same expected lifetime, and
+$h_{\mi{LC}}$ ranks objects like LRU.
+Since $b_4$ is filled by evictions, the heuristic learns end activities only
+once $B_1$ is full.
+
+\begin{example}[Bounded Run]
+\label{ex:run}
+We run $A_{\mi{df}}$ on the stream $S_{\mi{ex}}$ of
+Example~\ref{ex:running}.
+The configuration uses $c_1 = 4$ and $h_1 = h_{\mi{LRU}}$ for $B_1$ and
+$c_2 = c_3 = c_4 = \infty$.
+Ties are broken by the order $o_1, o_2, o_3, i_1, i_2, i_3$.
+Table~\ref{tab:run} shows the run.
+
+\begin{table}[t]
+\centering
+\caption{Run of $A_{\mi{df}}$ on $S_{\mi{ex}}$ under $c_1 = 4$ and LRU.
+Column $\mi{dom}(b_1)$ lists the buffered objects after each item.
+The last column lists the evicted objects with the end activity recorded in
+$b_4$.
+The eviction of $o_2$ at $i = 7$ is premature, because $o_2$ occurs again at
+$i = 8$.}
+\label{tab:run}
+\begin{tabular}{@{}clll@{}}
+\toprule
+$i$ & $s_i$ & $\mi{dom}(b_1)$ after $s_i$ & evicted (end activity) \\
+\midrule
+1 & $(\mi{place}, \{o_1, i_1\})$ & $o_1, i_1$ & -- \\
+2 & $(\mi{place}, \{o_2, i_2\})$ & $o_1, o_2, i_1, i_2$ & -- \\
+3 & $(\mi{pick}, \{i_1\})$ & $o_1, o_2, i_1, i_2$ & -- \\
+4 & $(\mi{pay}, \{o_1\})$ & $o_1, o_2, i_1, i_2$ & -- \\
+5 & $(\mi{ship}, \{o_1, i_1\})$ & $o_1, o_2, i_1, i_2$ & -- \\
+6 & $(\mi{pick}, \{i_2\})$ & $o_1, o_2, i_1, i_2$ & -- \\
+7 & $(\mi{place}, \{o_3, i_3\})$ & $o_3, i_1, i_2, i_3$ &
+  $o_2$ ($\mi{place}$), $o_1$ ($\mi{ship}$) \\
+8 & $(\mi{pay}, \{o_2\})$ & $o_2, o_3, i_2, i_3$ & $i_1$ ($\mi{ship}$) \\
+9 & $(\mi{ship}, \{o_2, i_2\})$ & $o_2, o_3, i_2, i_3$ & -- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The buffer first overflows at $i = 7$, when $o_3$ and $i_3$ arrive.
+The candidates are $o_1$, $o_2$, $i_1$, and $i_2$, last used at the positions
+$5$, $2$, $5$, and $6$.
+LRU first evicts $o_2$ and then, by the tie-breaking order, $o_1$.
+At $i = 8$, $o_2$ is created again as a new object, and LRU evicts $i_1$.
+Table~\ref{tab:models} compares the models after $s_9$.
+The bounded model contains the false start activity $\mi{pay}$ for orders.
+The premature eviction of $o_2$ causes two further errors that are masked.
+The arc $(\mi{place}, \mi{pay}, \mi{order})$ of $o_2$ is missing, but $o_1$
+contributes it as well.
+The false end activity $\mi{place}$ of $o_2$ is also the current activity of
+$o_3$.
+The lifecycle heuristic with the thresholds $T_{\mi{int}} = 200$ and
+$T_{\max} = 2000$ of~\cite{Muehlmeyer2026} learns within this run.
+Its first eviction at $i = 7$ agrees with LRU, since $b_4$ is still empty.
+This eviction records $\mi{place}$ as the end activity of a completed order
+lifecycle.
+Hence, the confidence that $\mi{ship}$ ends an order drops, and the expected
+lifetime of $o_1$ rises to $1991$, while $i_1$ keeps $1976$.
+The heuristic therefore evicts $i_1$ instead of $o_1$ at $i = 7$, and $o_1$ at
+$i = 8$.
+Both runs yield the same model.
+Note that the recorded end activity stems from the premature eviction of
+$o_2$, so a premature eviction also misleads the heuristic.
+\end{example}
+
+\begin{table}[t]
+\centering
+\caption{Models of the unbounded run and of the bounded run of
+Table~\ref{tab:run} after $s_9$.
+They differ only in the start activity $\mi{pay}$ of orders.}
+\label{tab:models}
+\begin{tabular}{@{}llll@{}}
+\toprule
+Type & Arcs & Start & End \\
+\midrule
+$\mi{order}$ (unbounded) & $\mi{place} \to \mi{pay}$,
+  $\mi{pay} \to \mi{ship}$ & $\mi{place}$ & $\mi{place}$, $\mi{ship}$ \\
+$\mi{order}$ (bounded) & $\mi{place} \to \mi{pay}$,
+  $\mi{pay} \to \mi{ship}$ & $\mi{place}$, $\mi{pay}$ &
+  $\mi{place}$, $\mi{ship}$ \\
+$\mi{item}$ (both) & $\mi{place} \to \mi{pick}$,
+  $\mi{pick} \to \mi{ship}$ & $\mi{place}$ & $\mi{place}$, $\mi{ship}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Correctness}
+\label{sec:framework:correctness}
+
+The bounded run should yield the same models as the unbounded run.
+Whether the unbounded run yields the offline model is a property of the
+algorithm, which holds for $A_{\mi{df}}$ and, up to hash collisions,
+for~\cite{Muehlmeyer2026} (Appendix~\ref{app:framework}).
+Evictions endanger this if an evicted key is needed again.
+
+\begin{definition}[Premature Eviction]
+\label{def:premature}
+Let $\la q_0, q_1, \dots \ra$ be the run of a streaming algorithm $A$ on a
+stream $S$ under a configuration $C$.
+Let $k$ be evicted from $B_j$ while processing $s_i$.
+The eviction is premature if and only if
+$k \in \mi{used}_j(q_{i'-1}, s_{i'})$ for some $i' > i$.
+The run is free of premature evictions up to $i$ if and only if no eviction
+while processing $s_1, \dots, s_{i-1}$ is premature because of an item
+$s_{i'}$ with $i' \le i$.
+\end{definition}
+
+An evicted key is missing, so a premature eviction is one whose key is created
+again later.
+In Example~\ref{ex:run}, the eviction of $o_2$ at $i = 7$ is premature, while the evictions of $o_1$ and $i_1$ are not.
+
+\begin{proposition}[Correctness of Bounded Runs]
+\label{prop:correctness}
+Let $A = (B_1, \dots, B_n, \mi{upd}, \mi{fin}, \mi{model})$ be a streaming
+algorithm with states $Q$.
+Buffer $B_j$ is a sink if $\mi{upd}(q, s)$ and $q$ coincide on $B_j$ for all
+$q \in Q$ and $s \in \Uitem$.
+Let $S$ be an object-centric event stream and let
+$C = ((c_1, h_1), \dots, (c_n, h_n))$ be a configuration that fits $S$ with
+$c_j = \infty$ for every sink $B_j$.
+Let $\la q_0, q_1, \dots \ra$ be the run of $A$ on $S$ under $C$ and
+$\la q_0^\infty, q_1^\infty, \dots \ra$ the unbounded run.
+Assume that for all $q = (b_1, \dots, b_n) \in Q$, $s \in \Uitem$,
+$1 \le j \le n$, and $k \in \mi{dom}(b_j)$:
+\begin{enumerate}
+  \item[(i)] if $k \notin \mi{used}_j(q, s)$, then
+        $\mi{upd}(q, s) = \mi{put}_j(\mi{upd}(\mi{del}_j(q, k), s), k,
+        b_j(k))$,
+  \item[(ii)] apart from removing $k$, $\mi{fin}(q, j, k)$ changes only
+        sinks, and these changes depend only on $k$, $b_j(k)$, and the sinks,
+        and
+  \item[(iii)] $\mi{model}(\mi{fin}(q, j, k)) = \mi{model}(q)$ if
+        $c_j < \infty$.
+\end{enumerate}
+If the run is free of premature evictions up to $i$, then
+$\mi{model}(q_i) = \mi{model}(q_i^\infty)$.
+\end{proposition}
+
+Condition~(i) states that an item neither reads nor changes a key it does not
+use.
+Since a used key is one the item would re-create, an item that needs an
+evicted key creates it again, and a premature eviction cannot go unnoticed.
+Condition~(ii) lets evictions record information only where items do not look,
+e.g., in $B_4$ of Example~\ref{ex:dfg}.
+Condition~(iii) states that evicting a key does not change the model.
+Appendix~\ref{app:framework} contains the proof and shows that $A_{\mi{df}}$
+satisfies all conditions.
+
+The proposition separates two sources of error.
+Buffers that violate~(iii) lose model information with every eviction.
+In $A_{\mi{df}}$, these are $B_2$, $B_3$, and $B_4$, whose keys are model
+elements.
+Their size depends on the numbers of activities and object types, so they can
+remain unbounded.
+Liss et al.~\cite{Liss2025} instead store the arcs as rows in a bounded buffer,
+which violates~(iii).
+Buffers that satisfy~(iii), such as $B_1$ or the divergence index
+of~\cite{Muehlmeyer2026}, lose information only through premature evictions.
+For these, the quality of a heuristic can be measured independently of the
+model.
+Premature evictions cannot be detected online, but they can be counted
+afterwards.
+We use the fraction of prematurely evicted keys as a measure in our evaluation.

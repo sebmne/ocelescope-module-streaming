@@ -32,7 +32,7 @@ export function RunToolbar(props: Props) {
         allowDeselect={false}
         w={260}
       />
-      {algorithm && properties(algorithm.config_schema).length > 0 && (
+      {algorithm && (properties(algorithm.config_schema).length > 0 || algorithm.buffers.length > 0) && (
         <Tooltip label="Settings">
           <ActionIcon variant="default" size="input-sm" aria-label="Settings" onClick={onSettings}>
             <SettingsIcon size={18} />

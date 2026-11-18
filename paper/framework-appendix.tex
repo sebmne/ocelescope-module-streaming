@@ -1,0 +1,222 @@
+% ---------------------------------------------------------------------------
+% Appendix to the framework chapter (framework.tex). Uses the same macros.
+% ---------------------------------------------------------------------------
+
+\section{Details of the Framework}
+\label{app:framework}
+
+This appendix defines the bookkeeping used by the heuristics, defines
+exactness, and proves Proposition~\ref{prop:correctness}.
+
+\subsection{Bookkeeping}
+
+\begin{definition}[Bookkeeping]
+\label{def:bookkeeping}
+Let $A = (B_1, \dots, B_n, \mi{upd}, \mi{fin}, \mi{model})$ be a streaming
+algorithm with states $Q$.
+Let $\eta = \la (s_1, q_1), \dots, (s_i, q_i) \ra \in \Uhist$, let
+$q_0 = q_\emptyset$, and let $q_{i'} = (b_1^{i'}, \dots, b_n^{i'})$ for
+$0 \le i' \le i$.
+Let $1 \le j \le n$ and $k \in \mi{dom}(b_j^i)$.
+The insertion position of $k$ is
+\[
+  \mi{ins}_j^\eta(k) = \min\{i' \mid 1 \le i' \le i \ \wedge\
+     \forall_{i' \le i'' \le i}\ k \in \mi{dom}(b_j^{i''})\}.
+\]
+The uses of $k$ since its insertion are
+$U = \{i' \mid \mi{ins}_j^\eta(k) \le i' \le i \ \wedge\
+k \in \mi{used}_j(q_{i'-1}, s_{i'})\}$.
+The last use and the frequency of $k$ are
+$\mi{last}_j^\eta(k) = \max(\{\mi{ins}_j^\eta(k)\} \cup U)$ and
+$\mi{freq}_j^\eta(k) = |U|$.
+\end{definition}
+
+In a run, the last state of the history is the state during eviction.
+A key that is evicted and created again starts with a new insertion position.
+Keys inserted by $\mi{fin}$ have no uses, so their last use is their
+insertion.
+An implementation stores three counters per key.
+
+\subsection{Exactness}
+
+\begin{definition}[Exactness]
+\label{def:exact}
+Let $A$ be a streaming algorithm with models in $\Umod$ and let
+$\mi{disc} \in \Uitem^* \rightarrow \Umod$ be an offline discovery function.
+$A$ is exact for $\mi{disc}$ if and only if
+$\mi{model}(q_i^\infty) = \mi{disc}(S_{\le i})$ for every well-formed
+object-centric event stream $S$, every $i \ge 1$, and the unbounded run
+$\la q_0^\infty, q_1^\infty, \dots \ra$ of $A$ on $S$.
+\end{definition}
+
+In the unbounded run of $A_{\mi{df}}$, $b_1$ holds the last activity of every
+object seen so far, $b_2$ counts the directly-follows pairs, $b_3$ counts the
+first activities, and $b_4$ stays empty.
+Hence, $A_{\mi{df}}$ is exact for the discovery of directly-follows arcs and
+start and end activities per object type.
+The algorithm of~\cite{Muehlmeyer2026} is exact for the DF$^2$ graph and the
+activity-type relations up to hash collisions.
+Together with Proposition~\ref{prop:correctness}, a bounded run on a
+well-formed stream yields the offline model if the algorithm is exact,
+satisfies the conditions of the proposition, and evicts no key prematurely.
+
+\subsection{Proof of Proposition~\ref{prop:correctness}}
+
+Let $A = (B_1, \dots, B_n, \mi{upd}, \mi{fin}, \mi{model})$ be a streaming
+algorithm with states $Q$ that satisfies condition~(i).
+For a finite set $X$ of pairs $(j, k)$ with $k \in K_j$, $\mi{del}_X(q)$
+removes all these keys from $q$.
+We write $q \approx q'$ if $q$ and $q'$ coincide on all buffers that are not
+sinks.
+We say that $q$ and $q'$ agree on $X$ if, for all $(j, k) \in X$, either
+$k$ is missing in both $b_j$ and $b_j'$, or $b_j(k) = b_j'(k)$.
+
+\begin{lemma}[Sinks Are Not Read]
+\label{lem:sinks}
+Let $q, \tilde{q} \in Q$ with $q \approx \tilde{q}$ and let $s \in \Uitem$.
+Then $\mi{upd}(q, s) \approx \mi{upd}(\tilde{q}, s)$.
+\end{lemma}
+
+\begin{proof}
+Since contents have finite domains, $\tilde{q}$ results from $q$ by finitely
+many steps that delete or put a single key of a sink.
+It suffices to consider one step.
+Let $B_j$ be a sink and $k \in K_j$.
+Since $\mi{upd}$ does not change $B_j$, $\mi{upd}(\mi{del}_j(y, k), s)$
+does not contain $k$ in $B_j$ for any $y \in Q$, i.e.,
+$k \notin \mi{used}_j(y, s)$.
+For $k \in \mi{dom}(b_j)$, condition~(i) yields
+$\mi{upd}(y, s) = \mi{put}_j(\mi{upd}(\mi{del}_j(y, k), s), k, b_j(k))
+\approx \mi{upd}(\mi{del}_j(y, k), s)$.
+Hence, deleting a key of a sink does not change $\mi{upd}(y, s)$ outside the
+sinks.
+Putting a key $k$ into $y$ is the inverse of deleting $k$ from
+$\mi{put}_j(y, k, v)$, which yields the claim for this step as well.
+\end{proof}
+
+\begin{lemma}[Commutation]
+\label{lem:commutation}
+Let $q \in Q$, $s \in \Uitem$, and let $X$ be a finite set of pairs
+$(j, k)$ such that $k$ is missing in $B_j$ in
+$\mi{upd}(\mi{del}_X(q), s)$ for all $(j, k) \in X$.
+Then $\mi{upd}(\mi{del}_X(q), s) = \mi{del}_X(\mi{upd}(q, s))$, and $q$ and
+$\mi{upd}(q, s)$ agree on $X$.
+\end{lemma}
+
+\begin{proof}
+By induction on $|X|$.
+For $X = \emptyset$, there is nothing to show.
+Otherwise, let $(j, k) \in X$, $X' = X \setminus \{(j, k)\}$, and
+$y = \mi{del}_{X'}(q)$, so that $\mi{del}_X(q) = \mi{del}_j(y, k)$.
+
+First, consider $k$.
+By assumption, $\mi{upd}(\mi{del}_j(y, k), s)$ does not contain $k$ in $B_j$,
+i.e., $k \notin \mi{used}_j(y, s)$.
+If $k \in \mi{dom}(b_j)$ for $y = (b_1, \dots, b_n)$, condition~(i) yields
+$\mi{upd}(y, s) = \mi{put}_j(\mi{upd}(\mi{del}_j(y, k), s), k, b_j(k))$.
+If $k \notin \mi{dom}(b_j)$, then $\mi{del}_j(y, k) = y$.
+In both cases,
+\begin{equation}
+  \mi{upd}(\mi{del}_j(y, k), s) = \mi{del}_j(\mi{upd}(y, s), k),
+  \label{eq:step}
+\end{equation}
+and $y$ and $\mi{upd}(y, s)$ agree on $\{(j, k)\}$.
+
+Second, consider $X'$.
+By~\eqref{eq:step}, $\mi{upd}(y, s)$ and $\mi{upd}(\mi{del}_X(q), s)$ coincide
+on all keys except $k$ in $B_j$.
+Hence, no key of $X'$ is present in $\mi{upd}(\mi{del}_{X'}(q), s)$, and the
+induction hypothesis yields
+$\mi{upd}(y, s) = \mi{del}_{X'}(\mi{upd}(q, s))$, and $q$ and
+$\mi{upd}(q, s)$ agree on $X'$.
+
+Combining both,
+$\mi{upd}(\mi{del}_X(q), s) = \mi{del}_j(\mi{del}_{X'}(\mi{upd}(q, s)), k)
+= \mi{del}_X(\mi{upd}(q, s))$.
+Moreover, $(j, k) \notin X'$, so $q$ and $y$ agree on $\{(j, k)\}$, and so do
+$\mi{upd}(q, s)$ and $\mi{del}_{X'}(\mi{upd}(q, s)) = \mi{upd}(y, s)$.
+Hence, $q$ and $\mi{upd}(q, s)$ agree on $\{(j, k)\}$.
+\end{proof}
+
+\begin{proof}[Proof of Proposition~\ref{prop:correctness}]
+Let the run be free of premature evictions up to $i$.
+Since sinks have infinite capacity, all evictions concern non-sink buffers.
+For $i' \le i$, let $X_{i'}$ be the set of pairs $(j, k)$ such that $k$ was
+evicted from $B_j$ while processing $s_1, \dots, s_{i'}$, and let
+$(j_1, k_1), \dots, (j_m, k_m)$ be the evictions up to $i$ in their order.
+Let $v_r$ be the value of $k_r$ in $B_{j_r}$ immediately before its eviction.
+
+No key is evicted twice.
+Otherwise, it would have been created again in between.
+By~(ii), $\mi{fin}$ does not create keys outside sinks, so an item would have
+created it, i.e., used it, and the first eviction would be premature.
+
+We show by induction on $i' \le i$ that
+\begin{enumerate}
+  \item[(a)] $q_{i'} \approx \mi{del}_{X_{i'}}(q_{i'}^\infty)$, and
+  \item[(b)] $q_{i'}^\infty$ contains $k_r$ in $B_{j_r}$ with value $v_r$ for
+        every eviction $r$ up to $i'$.
+\end{enumerate}
+For $i' = 0$, both states are empty and there are no evictions.
+Let $i' \ge 1$ and $X = X_{i'-1}$.
+By~(a), every key of $X$ is missing in $q_{i'-1}$.
+Since the run is free of premature evictions, $s_{i'}$ does not use these
+keys, i.e., they are missing in $\mi{upd}(q_{i'-1}, s_{i'})$.
+By~(a) and Lemma~\ref{lem:sinks},
+$\mi{upd}(q_{i'-1}, s_{i'}) \approx \mi{upd}(\mi{del}_X(q_{i'-1}^\infty),
+s_{i'})$, so the keys of $X$ are also missing in the latter state.
+Lemma~\ref{lem:commutation} yields
+\[
+  \mi{upd}(q_{i'-1}, s_{i'}) \approx
+  \mi{del}_X(\mi{upd}(q_{i'-1}^\infty, s_{i'})) =
+  \mi{del}_X(q_{i'}^\infty),
+\]
+and $q_{i'-1}^\infty$ and $q_{i'}^\infty$ agree on $X$.
+The latter preserves~(b) for all earlier evictions.
+By~(ii), each eviction while processing $s_{i'}$ removes its key and changes
+only sinks.
+This yields~(a) for $i'$.
+Before such an eviction $r$, the state coincides with
+$\mi{del}_{X'}(q_{i'}^\infty)$ outside the sinks for some $X'$ with
+$(j_r, k_r) \notin X'$.
+Hence, $v_r$ is the value of $k_r$ in $q_{i'}^\infty$, which yields~(b).
+
+Let $F$ apply the evictions in their order, i.e.,
+$F(q) = \mi{fin}(\dots \mi{fin}(q, j_1, k_1) \dots, j_m, k_m)$.
+We show $F(q_i^\infty) = q_i$.
+Outside the sinks, $F$ only removes the keys of $X_i$, so
+$F(q_i^\infty) \approx \mi{del}_{X_i}(q_i^\infty) \approx q_i$ by~(a).
+On the sinks, both $q_i^\infty$ and $q_0$ are empty, because $\mi{upd}$ does
+not change sinks and the unbounded run does not evict.
+The sinks of $q_i$ result from the empty sinks by the changes of the evictions
+$1, \dots, m$ in their order.
+By~(b), $F$ applies the $r$-th eviction to a state that contains $k_r$ with
+value $v_r$.
+By~(ii), the change of each eviction to the sinks depends only on $k_r$, $v_r$,
+and the sinks.
+By induction on $r$, the sinks of $F(q_i^\infty)$ and $q_i$ coincide.
+
+Finally, every eviction concerns a buffer with finite capacity.
+Applying~(iii) $m$ times yields
+$\mi{model}(q_i) = \mi{model}(F(q_i^\infty)) = \mi{model}(q_i^\infty)$.
+\end{proof}
+
+\subsection{Conditions for the Directly-Follows Algorithm}
+
+$A_{\mi{df}}$ of Example~\ref{ex:dfg} satisfies the conditions of
+Proposition~\ref{prop:correctness} if $c_2 = c_3 = c_4 = \infty$.
+\begin{enumerate}
+  \item[(i)] Let $s$ be an event item and $k \notin \mi{used}_j(q, s)$.
+        Every object of $s$ is used, so for $j = 1$, $k$ is an object not
+        in $s$, which $\mi{upd}$ neither reads nor changes.
+        For $j \in \{2, 3\}$, $\mi{upd}$ only changes the keys it adds,
+        which are used, and it does not read $b_2$ or $b_3$ otherwise.
+        $B_4$ is never read or changed by $\mi{upd}$.
+        For other items, $\mi{upd}$ changes nothing.
+  \item[(ii)] $B_4$ is the only sink.
+        $\mi{fin}(q, 1, o)$ removes $o$ and adds $b_1(o)$ to $b_4$, which
+        depends only on $b_1(o)$ and $b_4$.
+        For $j \in \{2, 3, 4\}$, $\mi{fin}(q, j, k)$ only removes $k$.
+  \item[(iii)] For $j = 1$, the end activity $b_1(o)$ moves from
+        $\mi{rng}(b_1)$ to $\mi{dom}(b_4)$, so the model does not change.
+\end{enumerate}
