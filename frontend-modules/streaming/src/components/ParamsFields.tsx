@@ -1,4 +1,4 @@
-import { Group, NumberInput, Switch, TextInput, Tooltip } from "@mantine/core";
+import { Group, NumberInput, Select, Switch, TextInput, Tooltip } from "@mantine/core";
 
 type Property = {
   type?: string;
@@ -7,6 +7,7 @@ type Property = {
   minimum?: number;
   maximum?: number;
   exclusiveMinimum?: number;
+  enum?: string[];
 };
 
 type ParamsFieldsProps = {
@@ -31,6 +32,20 @@ export function ParamsFields({ schema, values, onChange, size = "xs" }: ParamsFi
             <span>{property.title ?? key}</span>
           </Tooltip>
         );
+        if (property.enum) {
+          return (
+            <Select
+              key={key}
+              size={size}
+              w={160}
+              label={label}
+              allowDeselect={false}
+              value={String(values[key] ?? property.enum[0])}
+              data={property.enum.map((option) => ({ value: option, label: option.replaceAll("_", " ") }))}
+              onChange={(value) => value !== null && set(key, value)}
+            />
+          );
+        }
         if (property.type === "boolean") {
           return (
             <Switch

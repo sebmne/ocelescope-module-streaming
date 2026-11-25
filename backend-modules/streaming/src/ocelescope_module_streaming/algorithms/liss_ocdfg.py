@@ -16,16 +16,19 @@ is bounded by the capacity of the arc buffer. Liss et al. do not define end acti
 earlier ports of their implementation, an activity is an end activity of a type if it is the
 target of a row of that type but the source of none.
 
-Not represented, because the framework only inserts: the optional buffer synchronization
-(coupled removal) of Liss et al. The object-centric priority policies are not implemented.
+Optional buffer synchronization (coupled removal) of Liss et al.: with `coupled_removal` set to
+"objects" or "object_types", every eviction is handed to a `CoupledRemoval`. After the item, an
+object (or object type) that no longer occurs in the buffer it was evicted from is deleted from the
+other buffer. The object-centric priority policies are not implemented.
 """
 
 from collections import Counter
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 from ocelescope import DirectlyFollowsGraph
 
-from ocelescope_module_streaming.framework import BufferSpec, StreamingAlgorithm, register_algorithm
+from ocelescope_module_streaming.algorithms.coupling import CouplingParams
+from ocelescope_module_streaming.framework import BufferSpec, CoupledRemoval, StreamingAlgorithm, register_algorithm
 from ocelescope_module_streaming.models import Arc, Endpoint, build_ocdfg
 from ocelescope_module_streaming.stream import Event, StreamItem, StreamOptions, Timestamp, seconds_between, tobj
 
@@ -59,6 +62,7 @@ class LissOCDFG(StreamingAlgorithm[DirectlyFollowsGraph]):
     )
     model_label = "OC-DFG"
     stream = StreamOptions(events=True, o2o_updates=False, attribute_updates=False)
+    Params = CouplingParams
     buffer_specs = (
         BufferSpec(
             "objects",
@@ -81,14 +85,32 @@ class LissOCDFG(StreamingAlgorithm[DirectlyFollowsGraph]):
         ),
     )
 
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        assert isinstance(self.params, CouplingParams)
+        objects, arcs = self.buffers["objects"], self.buffers["arcs"]
+        self.coupling: CoupledRemoval | None = None
+        if self.params.coupled_removal == "objects":
+            self.coupling = CoupledRemoval(
+                {"objects": (objects, lambda key, _: (key,)), "arcs": (arcs, lambda _, row: (row.obj,))}
+            )
+        elif self.params.coupled_removal == "object_types":
+            self.coupling = CoupledRemoval(
+                {
+                    "objects": (objects, lambda _, state: (state.object_type,)),
+                    "arcs": (arcs, lambda _, row: (row.object_type,)),
+                }
+            )
+
     def upd(self, item: StreamItem) -> None:
         if not isinstance(item.x, Event):
             return
         objects, arcs = self.buffers["objects"], self.buffers["arcs"]
         activity, typed = item.x.activity, tobj(item)
         previous: list[ObjectState | None] = [objects.get(o.id) for o in typed]
+        evictions: list[tuple[str, tuple[Any, Any] | None]] = []
         for o in typed:
-            objects.ins(o.id, ObjectState(o.type, activity, item.t))
+            evictions.append(("objects", objects.ins(o.id, ObjectState(o.type, activity, item.t))))
         position = self.clock.position
         for index, (o, before) in enumerate(zip(typed, previous, strict=True)):
             row = ArcRow(
@@ -99,7 +121,11 @@ class LissOCDFG(StreamingAlgorithm[DirectlyFollowsGraph]):
                 frequency=1 / len(typed),
                 duration=None if before is None else seconds_between(before.last_seen, item.t),
             )
-            arcs.ins((position, index), row)
+            evictions.append(("arcs", arcs.ins((position, index), row)))
+        if self.coupling is not None:
+            for name, evicted in evictions:
+                self.coupling.evicted(name, evicted)
+            self.coupling.sync()
 
     def emit(self) -> DirectlyFollowsGraph:
         arcs: Counter[Arc] = Counter()

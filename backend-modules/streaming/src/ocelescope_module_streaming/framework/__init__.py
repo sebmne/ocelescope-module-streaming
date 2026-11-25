@@ -16,6 +16,7 @@ from ocelescope_module_streaming.framework.algorithm import (
     register_algorithm,
 )
 from ocelescope_module_streaming.framework.buffer import Buffer, Clock, HeuristicError, Record
+from ocelescope_module_streaming.framework.coupling import CoupledRemoval, Members
 from ocelescope_module_streaming.framework.heuristic import (
     HEURISTICS,
     Heuristic,
@@ -39,11 +40,13 @@ __all__ = [
     "BufferSpec",
     "BufferStats",
     "Clock",
+    "CoupledRemoval",
     "FillSeries",
     "Heuristic",
     "HeuristicConfig",
     "HeuristicError",
     "InvalidConfig",
+    "Members",
     "NoParams",
     "PrivateBuffer",
     "PrivateBufferInfo",

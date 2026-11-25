@@ -57,6 +57,7 @@ class BufferStatus(BaseModel):
     heuristic: str
     insertions: int
     evictions: int
+    deletions: int
     premature: int
     peak: int
 
@@ -227,6 +228,7 @@ class Replay:
                     heuristic=buffer.heuristic.name,
                     insertions=stats.insertions,
                     evictions=stats.evictions,
+                    deletions=stats.deletions,
                     premature=stats.premature,
                     peak=stats.peak,
                 )

@@ -24,17 +24,22 @@ The model, for each pair (a, b) of connected types (types related by a row), wit
     temporal relation   the most precise relation that holds for at least tau of the buffered
                         object pairs whose lifespans are buffered; parallel always holds.
 
-Rows have fresh keys (position, index), so full row buffers forget old behaviour. The optional
-buffer synchronization of Liss et al. is not represented, because the framework only inserts.
+Rows have fresh keys (position, index), so full row buffers forget old behaviour.
+
+Optional buffer synchronization (coupled removal) of Liss et al.: with `coupled_removal` set to
+"objects", an object that no longer occurs in the buffer it was evicted from is deleted from the
+lifespan and log-cardinality buffers (event-cardinality rows hold no objects); with
+"object_types", an object type is deleted from all three buffers.
 """
 
 from collections.abc import Iterable, Mapping
 from itertools import combinations
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 
-from ocelescope_module_streaming.framework import BufferSpec, StreamingAlgorithm, register_algorithm
+from ocelescope_module_streaming.algorithms.coupling import CouplingParams
+from ocelescope_module_streaming.framework import BufferSpec, CoupledRemoval, StreamingAlgorithm, register_algorithm
 from ocelescope_module_streaming.models import (
     EVENT_CARDINALITIES,
     LOG_CARDINALITIES,
@@ -76,9 +81,7 @@ ONE = frozenset({"1", "0..1", "1..*", "0..*"})
 NONE = frozenset({"0", "0..1", "0..*"})
 
 
-class TotemParams(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class TotemParams(CouplingParams):
     tau: float = Field(
         default=1.0, ge=0, le=1, title="τ", description="The share of observations a relation must hold for."
     )
@@ -127,6 +130,37 @@ class LissTotem(StreamingAlgorithm[Totem]):
         ),
     )
 
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        assert isinstance(self.params, TotemParams)
+        lifespans, log_rows, event_rows = (
+            self.buffers[name] for name in ("lifespans", "log_cardinality", "event_cardinality")
+        )
+        self.coupling: CoupledRemoval | None = None
+        if self.params.coupled_removal == "objects":
+            self.coupling = CoupledRemoval(
+                {
+                    "lifespans": (lifespans, lambda key, _: (key,)),
+                    "log_cardinality": (log_rows, lambda _, row: row.objects),
+                }
+            )
+        elif self.params.coupled_removal == "object_types":
+            self.coupling = CoupledRemoval(
+                {
+                    "lifespans": (lifespans, lambda _, span: (span.object_type,)),
+                    "log_cardinality": (log_rows, lambda _, row: row.types),
+                    "event_cardinality": (
+                        event_rows,
+                        lambda _, row: (row.source,) if row.target is None else (row.source, row.target),
+                    ),
+                }
+            )
+
+    def _ins(self, name: str, key: Any, value: Any) -> None:
+        evicted = self.buffers[name].ins(key, value)
+        if self.coupling is not None:
+            self.coupling.evicted(name, evicted)
+
     def upd(self, item: StreamItem) -> None:
         if not isinstance(item.x, Event | O2OUpdate):
             return
@@ -137,32 +171,33 @@ class LissTotem(StreamingAlgorithm[Totem]):
             for o in typed:
                 before: Lifespan | None = lifespans.get(o.id)
                 first = item.t if before is None else before.first
-                lifespans.ins(o.id, Lifespan(o.type, item.x.activity, first, item.t))
-        log_rows = self.buffers["log_cardinality"]
+                self._ins("lifespans", o.id, Lifespan(o.type, item.x.activity, first, item.t))
         index = 0
         for x, y in combinations(typed, 2):
             if x.type == y.type:
                 continue
             (ta, oa), (tb, ob) = sorted(((x.type, x.id), (y.type, y.id)))
-            log_rows.ins((position, index), LogCardinalityRow((ta, tb), (oa, ob)))
+            self._ins("log_cardinality", (position, index), LogCardinalityRow((ta, tb), (oa, ob)))
             index += 1
         if isinstance(item.x, Event):
             self._insert_event_cardinalities(position, [o.type for o in typed])
+        if self.coupling is not None:
+            self.coupling.sync()
 
     def _insert_event_cardinalities(self, position: int, types: list[str]) -> None:
-        rows = self.buffers["event_cardinality"]
         counts: dict[str, int] = {}
         for t in types:
             counts[t] = counts.get(t, 0) + 1
         if len(counts) == 1:
             (only,) = counts
-            rows.ins((position, 0), EventCardinalityRow(only, None, position, NONE))
+            self._ins("event_cardinality", (position, 0), EventCardinalityRow(only, None, position, NONE))
             return
         index = 0
         for source in counts:
             for target, n in counts.items():
                 if target != source:
-                    rows.ins((position, index), EventCardinalityRow(source, target, position, MANY if n > 1 else ONE))
+                    row = EventCardinalityRow(source, target, position, MANY if n > 1 else ONE)
+                    self._ins("event_cardinality", (position, index), row)
                     index += 1
 
     def emit(self) -> Totem:

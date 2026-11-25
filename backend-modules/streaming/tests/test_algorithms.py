@@ -187,3 +187,49 @@ def test_replays_stay_within_their_capacities(ocel: OCEL, key: str, heuristic: s
                 current.model()
     assert time.perf_counter() - started < 60
     assert current.model() is not None
+
+
+# Coupled removal (buffer synchronization of Liss et al.)
+
+
+def test_ocdfg_coupled_removal_by_object() -> None:
+    algorithm = LissOCDFG(
+        {"objects": BufferConfig(capacity=2), "arcs": BufferConfig(capacity=100)},
+        params={"coupled_removal": "objects"},
+    )
+    run(algorithm, running_example())
+    objects = set(algorithm.buffers["objects"].keys())
+    assert {row.obj for row in algorithm.buffers["arcs"].values()} <= objects
+
+
+def test_ocdfg_without_coupled_removal_keeps_rows_of_evicted_objects() -> None:
+    algorithm = LissOCDFG({"objects": BufferConfig(capacity=2), "arcs": BufferConfig(capacity=100)})
+    run(algorithm, running_example())
+    assert len(algorithm.buffers["arcs"]) == 14
+
+
+def test_totem_coupled_removal_by_object_type() -> None:
+    algorithm = LissTotem(
+        {
+            "lifespans": BufferConfig(capacity=100),
+            "log_cardinality": BufferConfig(capacity=100),
+            "event_cardinality": BufferConfig(capacity=1),
+        },
+        params={"coupled_removal": "object_types"},
+    )
+    run(algorithm, liss_example())
+    # The last event (Label) leaves only Shipping label in the event-cardinality buffer, so the
+    # other types are deleted from the other buffers.
+    types = {span.object_type for span in algorithm.buffers["lifespans"].values()}
+    assert types <= {"Shipping label"}
+    assert all(set(row.types) <= {"Shipping label", "Parcel"} for row in algorithm.buffers["log_cardinality"].values())
+
+
+def test_coupled_removal_keeps_capacities(ocel: OCEL) -> None:
+    for key, mode in [("liss_ocdfg", "objects"), ("liss_totem", "objects"), ("liss_totem", "object_types")]:
+        cls = ALGORITHMS[key]
+        algorithm = cls({spec.name: BufferConfig(capacity=100) for spec in cls.buffer_specs}, {"coupled_removal": mode})
+        with ocel_stream(ocel, cls.stream) as stream:
+            for _, item in zip(range(5000), stream, strict=False):
+                Run(algorithm).step(item)
+        assert all(len(buffer) <= 100 for buffer in algorithm.buffers.values())

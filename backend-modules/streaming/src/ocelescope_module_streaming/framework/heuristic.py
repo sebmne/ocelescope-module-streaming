@@ -107,7 +107,8 @@ class PrivateBuffer(Generic[K, S]):
 class Heuristic(ABC, Generic[K, V]):
     """An eviction heuristic for a single buffer.
 
-    Subclasses define `select` and observe the history through `on_insert` and `on_evict`.
+    Subclasses define `select` and observe the history through `on_insert`, `on_evict` and
+    `on_delete`.
     Class attributes describe the heuristic in the catalog.
 
     Args:
@@ -135,6 +136,13 @@ class Heuristic(ABC, Generic[K, V]):
 
     def on_evict(self, key: K, value: V, position: int) -> None:  # noqa: B027
         """Observes the record (evict, key, value) at `position`."""
+
+    def on_delete(self, key: K, value: V, position: int) -> None:
+        """Observes the record (del, key, value) at `position`.
+
+        Like an eviction, a deletion ends rho_k. By default, it is handled as an eviction.
+        """
+        self.on_evict(key, value, position)
 
     @abstractmethod
     def select(self, position: int) -> K:

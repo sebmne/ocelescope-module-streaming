@@ -1,8 +1,10 @@
 """Streaming algorithms (paper, Definition "Streaming Algorithm").
 
 A streaming algorithm A = (B_1, ..., B_n, upd, emit) has buffers and two functions on their
-contents: upd(b, s) processes an item by finitely many applications of ins, and emit(b) yields the
-current model. Subclasses declare their buffers as `BufferSpec`s and implement `upd` and `emit`.
+contents: upd(b, s) processes an item by finitely many applications of ins and del, and emit(b)
+yields the current model. Every eviction is returned to upd, which may use del to keep other
+buffers consistent with it (see `CoupledRemoval`). Subclasses declare their buffers as
+`BufferSpec`s and implement `upd` and `emit`.
 
 An algorithm defines what is stored and how the model is computed; the capacity and heuristic of
 each buffer are configuration (`BufferConfig`), so the same algorithm runs with any of them.
@@ -120,7 +122,7 @@ class StreamingAlgorithm(ABC, Generic[M]):
 
     @abstractmethod
     def upd(self, item: StreamItem) -> None:
-        """Processes an item, changing the buffers only with `Buffer.ins`."""
+        """Processes an item, changing the buffers only with `Buffer.ins` and `Buffer.delete`."""
 
     @abstractmethod
     def emit(self) -> M:

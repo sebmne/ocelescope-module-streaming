@@ -109,6 +109,11 @@ class Lifecycle(Heuristic[Any, Any]):
         pair = lifecycle_pair(value)
         self.histogram.ins(pair, self.histogram.get(pair, 0) + 1)
 
+    def on_delete(self, key: Any, value: Any, position: int) -> None:
+        # A deleted object was not forgotten because of its lifetime, so the histogram, which
+        # learns from evictions, ignores it.
+        self.last.remove(key)
+
     def life(self, object_type: str, activity: str) -> int:
         """life_rho(ot, a) for the current histogram."""
         n = sum(count for (ot, _), count in self.histogram.items() if ot == object_type)

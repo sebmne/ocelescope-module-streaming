@@ -62,12 +62,14 @@ class BufferStats:
     Attributes:
         insertions: Applications of ins.
         evictions: Evicted keys.
+        deletions: Keys removed with del (e.g. by coupled removal).
         premature: Evictions found premature so far, i.e. whose key was inserted again later.
         peak: The largest number of keys at any time.
     """
 
     insertions: int = 0
     evictions: int = 0
+    deletions: int = 0
     premature: int = 0
     peak: int = 0
 
@@ -100,6 +102,9 @@ class BufferMonitor:
         stats, evicted = self.stats[path], self._evicted[path]
 
         def listen(record: Record) -> None:
+            if record.kind == "del":
+                stats.deletions += 1
+                return
             if record.kind == "evict":
                 stats.evictions += 1
                 evicted.add(_hashable(record.key))

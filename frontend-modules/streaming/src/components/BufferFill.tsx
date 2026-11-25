@@ -71,6 +71,7 @@ function BufferCard({ buffer, label, positions, sizes }: BufferCardProps) {
       >
         <Text size="10px" c="dimmed">
           {buffer.heuristic} · {formatCount(buffer.evictions)} evicted
+          {buffer.deletions > 0 && ` · ${formatCount(buffer.deletions)} deleted`}
           {premature !== null && ` · ${(premature * 100).toFixed(1)}% premature`}
         </Text>
       </Tooltip>

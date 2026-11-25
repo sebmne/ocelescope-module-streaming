@@ -19,6 +19,7 @@ from ocelescope_module_streaming.framework import (
     BufferMonitor,
     BufferSpec,
     Clock,
+    CoupledRemoval,
     FillSeries,
     HeuristicConfig,
     InvalidConfig,
@@ -284,3 +285,57 @@ def test_fill_series_stays_bounded() -> None:
 def test_unknown_buffers_are_rejected() -> None:
     with pytest.raises(InvalidConfig):
         ObjectBuffer({"nope": BufferConfig(capacity=1)})
+
+
+# del and coupled removal
+
+
+@pytest.mark.parametrize("name", ["fifo", "lru", "lfu", "lfu_da", "random", "lifecycle"])
+def test_delete_removes_keys_and_their_statistics(name: str) -> None:
+    clock = Clock()
+    buffer = make_buffer(name, 3, clock)
+    for key in "abc":
+        clock.advance()
+        buffer.ins(key, Seen("t", "x"))
+    assert buffer.delete("b") == Seen("t", "x")
+    assert buffer.delete("b") is None
+    assert "b" not in buffer
+    clock.advance()
+    assert buffer.ins("d", Seen("t", "y")) is None  # the freed slot is used without eviction
+    evicted = buffer.ins("e", Seen("t", "z"))
+    assert evicted is not None and evicted[0] in {"a", "c", "d"}
+
+
+def test_deletions_do_not_teach_the_lifecycle_histogram() -> None:
+    buffer = make_buffer("lifecycle", 2)
+    buffer.ins("a", Seen("t", "x"))
+    buffer.delete("a")
+    assert len(buffer.heuristic.private_buffers()[1]) == 0  # type: ignore[arg-type]
+
+
+def test_monitor_counts_deletions() -> None:
+    algorithm = ObjectBuffer({"objects": BufferConfig(capacity=4)})
+    monitor = BufferMonitor(algorithm)
+    current = Run(algorithm)
+    current.feed(running_example()[:2])
+    algorithm.buffers["objects"].delete("o1")
+    assert monitor.stats["objects"].deletions == 1
+
+
+def test_coupled_removal_deletes_members_that_left_their_buffer() -> None:
+    clock = Clock()
+    objects = make_buffer("fifo", 2, clock)
+    rows = make_buffer("fifo", 10, clock)
+    coupling = CoupledRemoval({"objects": (objects, lambda k, _: (k,)), "rows": (rows, lambda _, v: (v,))})
+    for index, obj in enumerate(["o1", "o2", "o1"]):
+        rows.ins(index, obj)
+    objects.ins("o1", None)
+    objects.ins("o2", None)
+    coupling.evicted("objects", objects.ins("o3", None))  # evicts o1
+    assert coupling.sync() == 2
+    assert list(rows.values()) == ["o2"]
+    # A member that is still buffered elsewhere in its own buffer is kept.
+    rows.ins(3, "o2")
+    coupling.evicted("rows", (1, "o2"))
+    assert coupling.sync() == 0
+    assert "o2" in objects

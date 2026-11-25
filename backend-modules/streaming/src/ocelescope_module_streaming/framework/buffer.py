@@ -1,12 +1,16 @@
 """Buffers (paper, Definition "Buffer") and their histories.
 
-A buffer B = (K, V, c, H) holds a partial function b: K -> V with at most c keys. The only way to
-change it is ins(b, k, v): if k is buffered or the buffer is not full, k is set to v; otherwise
-the heuristic H selects a buffered key x = H(rho) from the history rho of the buffer, x is
-evicted, and k is set to v.
+A buffer B = (K, V, c, H) holds a partial function b: K -> V with at most c keys. It changes
+through two operations:
+
+- ins(b, k, v): if k is buffered or the buffer is not full, k is set to v; otherwise the heuristic
+  H selects a buffered key x = H(rho) from the history rho of the buffer, x is evicted, and k is
+  set to v. The evicted entry (x, b(x)) is returned to the algorithm.
+- del(b, k): removes k, if it is buffered. Algorithms use it optionally, e.g. to keep two buffers
+  consistent after an eviction (the coupled removal of Liss et al.).
 
 The history rho is not stored. Instead, the buffer reports every record of rho to its heuristic as
-it happens (`Heuristic.on_insert` and `Heuristic.on_evict`), and the heuristic keeps whatever it
+it happens (`Heuristic.on_insert`, `Heuristic.on_evict` and `Heuristic.on_delete`), and the heuristic keeps whatever it
 needs of rho in its own bounded, private buffers. The position m = |rho| is the position of the
 current stream item, given by a `Clock` that the run advances before each item.
 """
@@ -41,7 +45,7 @@ class Clock:
 class Record:
     """A record (e, k, v) of a history, with the position of the item that caused it."""
 
-    kind: Literal["ins", "evict"]
+    kind: Literal["ins", "evict", "del"]
     key: Any
     value: Any
     position: int
@@ -133,6 +137,20 @@ class Buffer(Generic[K, V]):
         self.heuristic.on_insert(key, value, position, new)
         self._notify(Record("ins", key, value, position))
         return evicted
+
+    def delete(self, key: K) -> V | None:
+        """del(b, k): removes `key` if it is buffered.
+
+        Returns:
+            The removed value, or None if `key` was not buffered.
+        """
+        if key not in self._content:
+            return None
+        position = self.clock.position
+        value = self._content.pop(key)
+        self.heuristic.on_delete(key, value, position)
+        self._notify(Record("del", key, value, position))
+        return value
 
     def _notify(self, record: Record) -> None:
         for listener in self.listeners:
