@@ -3,7 +3,7 @@ import { WavesIcon } from "lucide-react";
 import StreamingPage from "./routes/StreamingPage";
 
 const streamingRoute = defineModuleRoute({
-  name: "runs",
+  name: "replay",
   label: "Streaming",
   requiresOcel: true,
   component: StreamingPage,

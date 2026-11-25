@@ -1,0 +1,391 @@
+% ---------------------------------------------------------------------------
+% Framework chapter. Requires amsmath, amssymb, amsthm, booktabs, algorithm,
+% algpseudocode, and tikz with the positioning library.
+% The universes \Utime, \Uact, \Uobj, \Utype, \Uattr, \Uval, \Uqual and the
+% notation for partial functions are assumed from the preliminaries; the
+% macros below are only fallbacks.
+% ---------------------------------------------------------------------------
+\providecommand{\mi}[1]{\mathit{#1}}
+\providecommand{\la}{\langle}
+\providecommand{\ra}{\rangle}
+\providecommand{\Utime}{\mathcal{U}_{\mi{time}}}
+\providecommand{\Uact}{\mathcal{U}_{\mi{act}}}
+\providecommand{\Uobj}{\mathcal{U}_{\mi{obj}}}
+\providecommand{\Utype}{\mathcal{U}_{\mi{type}}}
+\providecommand{\Uattr}{\mathcal{U}_{\mi{attr}}}
+\providecommand{\Uval}{\mathcal{U}_{\mi{val}}}
+\providecommand{\Uqual}{\mathcal{U}_{\mi{qual}}}
+\providecommand{\Uev}{\mathcal{U}_{\mi{ev}}}
+\providecommand{\Uoo}{\mathcal{U}_{\mi{o2o}}}
+\providecommand{\Uau}{\mathcal{U}_{\mi{au}}}
+\providecommand{\Uitem}{\mathcal{U}_{\mi{item}}}
+\providecommand{\Umod}{\mathcal{U}_{\mi{model}}}
+\providecommand{\pfun}{\nrightarrow}
+\providecommand{\restr}{\mathord{\upharpoonright}}
+\providecommand{\ocs}[2]{\ensuremath{\left\{\begin{smallmatrix} #1 \\ #2
+  \end{smallmatrix}\right\}}}
+
+\section{A Buffer-Based Streaming Framework}
+\label{sec:framework}
+
+This section introduces a general framework for object-centric discovery on the basis of object-centric event streams. We restrict ourselves to streaming discovery algorithms with strictly bounded memory, which is the setting of Liss et al.~\cite{Liss2025}. As a consequence, the approach presented by Mühlmeyer et al.~\cite{Muehlmeyer2026} cannot directly be modeled in the framework. Everything an algorithm can remember is stored in \emph{buffers} of a fixed, finite capacity. When new information needs to be added to an already full buffer, a \emph{heuristic} selects information that is to be forgotten.
+
+The framework separates what an algorithm remembers from how it forgets. An algorithm defines which information is stored in its buffers and how the current model is computed from them. The capacity and heuristic of each buffer define how much is kept and what is forgotten. The same algorithm can therefore be run with different capacities and heuristics, which allows comparing heuristics on equal terms. We consider the cache replacement strategies of Liss et al.~\cite{Liss2025} and adapt the lifecycle estimation of Mühlmeyer et al.~\cite{Muehlmeyer2026} to fixed capacities. Figure~\ref{fig:framework} shows how one stream item is processed.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+    node distance=6mm and 9mm,
+    box/.style={draw, rounded corners, minimum height=8mm, align=center, font=\small},
+    lbl/.style={font=\footnotesize, align=center},
+    >=stealth]
+  \node[lbl] (item) {item\\$s_i$};
+  \node[box, right=of item] (upd) {$\mi{upd}$};
+  \node[box, right=16mm of upd] (buf) {buffers\\$B_1, \dots, B_n$};
+  \node[box, right=of buf] (emit) {$\mi{emit}$};
+  \node[lbl, right=of emit] (model) {model};
+  \node[box, below=9mm of buf] (heur) {heuristics};
+  \draw[->] (item) -- (upd);
+  \draw[<->] (upd) -- node[lbl, above] {$\mi{ins}$} (buf);
+  \draw[->] (buf) -- (emit);
+  \draw[->] (emit) -- (model);
+  \draw[->] ([xshift=-6mm]buf.south) -- node[lbl, left] {history $\rho$} ([xshift=-6mm]heur.north);
+  \draw[->] ([xshift=6mm]heur.north) -- node[lbl, right] {key $x$} ([xshift=6mm]buf.south);
+\end{tikzpicture}
+\caption{Processing of stream item $s_i$.
+The function $\mi{upd}$ changes the buffers only by inserting keys.
+If a new key is inserted into a full buffer, the heuristic of the buffer
+selects a key $x$ from the history of the buffer, and $x$ is evicted.
+The function $\mi{emit}$ computes the current model from the buffers.}
+\label{fig:framework}
+\end{figure}
+
+\subsection{Object-Centric Event Streams}
+\label{sec:framework:streams}
+
+
+We adapt the object-centric event streams of Liss et al.~\cite{Liss2025}.
+In contrast to~\cite{Liss2025}, each position of the stream holds a single
+item.
+Simultaneous items follow each other with equal timestamps.
+
+\begin{definition}[Stream Item]
+\label{def:item}
+$\Uev = \Uact \times \mathcal{P}(\Uobj \times \Utype \times \Uqual) \times
+(\Uattr \pfun \Uval)$ is the universe of events,
+$\Uoo = \Uobj \times \Utype \times \Uqual \times \Uobj \times \Utype$ is the
+universe of object-to-object (O2O) updates, and
+$\Uau = \Uobj \times \Utype \times \Uattr \times \Uval$ is the universe of
+attribute updates.
+$\Uitem = (\Uev \cup \Uoo \cup \Uau) \times \Utime$ is the universe of
+stream items.
+An event $(a, R, d) \in \Uev$ has activity $a$, a finite set $R$ of
+qualified event-to-object relations, and attribute values $d$.
+
+Let $s = (x, t) \in \Uitem$.
+The typed objects of $s$ are
+\begin{itemize}
+  \item $\mi{tobj}(s) = \{(o, \mi{ot}) \mid \exists_{q \in \Uqual}\
+        (o, \mi{ot}, q) \in R\}$ if $x = (a, R, d) \in \Uev$,
+  \item $\mi{tobj}(s) = \{(o_1, \mi{ot}_1), (o_2, \mi{ot}_2)\}$ if
+        $x = (o_1, \mi{ot}_1, q, o_2, \mi{ot}_2) \in \Uoo$, and
+  \item $\mi{tobj}(s) = \{(o, \mi{ot})\}$ if
+        $x = (o, \mi{ot}, \mi{attr}, v) \in \Uau$.
+\end{itemize}
+The objects of $s$ are
+$\mi{obj}(s) = \{o \mid \exists_{\mi{ot} \in \Utype}\ (o, \mi{ot}) \in
+\mi{tobj}(s)\}$.
+\end{definition}
+
+\begin{definition}[Object-Centric Event Stream]
+\label{def:stream}
+An object-centric event stream is a finite or infinite sequence
+$S = \la s_1, s_2, \dots \ra$ of stream items $s_i = (x_i, t_i) \in \Uitem$.
+For $i \ge 1$, $S_{\le i} = \la s_1, \dots, s_i \ra$ is the prefix of $S$
+up to $s_i$.
+$S$ is well-formed if and only if
+\begin{enumerate}
+  \item[(i)] $t_i \le t_j$ for all $1 \le i \le j$, and
+  \item[(ii)] $\mi{ot} = \mi{ot}'$ for all $i, j \ge 1$, $o \in \Uobj$, and
+        $\mi{ot}, \mi{ot}' \in \Utype$ with $(o, \mi{ot}) \in \mi{tobj}(s_i)$
+        and $(o, \mi{ot}') \in \mi{tobj}(s_j)$.
+\end{enumerate}
+\end{definition}
+
+A prefix $S_{\le i}$ is the event data that an offline algorithm would
+receive after $s_i$, i.e., the materialized event log.
+
+\begin{example}[Running Example]
+\label{ex:running}
+Consider an order-management process with the object types $\mi{order}$ and $\mi{item}$. An order is placed with its items ($\mi{place}$), each item is picked ($\mi{pick}$), and the order is paid ($\mi{pay}$) and shipped with its items ($\mi{ship}$). Each event $e_i$ of a log becomes the stream item $s_i = ((a_i, R_i, \emptyset), i)$ with timestamp $i$, where $R_i$ relates the objects of $e_i$ with the empty qualifier $\bot \in \Uqual$.
+
+For an easier representation, we follow~\cite{Muehlmeyer2026} and we write each item as its activity and its objects, with orders in the upper and items in the lower row:
+\[
+\begin{aligned}
+  S_{\mi{ex}} = \bigl\langle\
+  & (\mi{place}, \ocs{o_1}{i_1}),\
+    (\mi{place}, \ocs{o_2}{i_2}),\
+    (\mi{pick}, \ocs{\phantom{o_1}}{i_1}),\
+    (\mi{pay}, \ocs{o_1}{\phantom{i_1}}),\
+    (\mi{ship}, \ocs{o_1}{i_1}),\\
+  & (\mi{pick}, \ocs{\phantom{o_1}}{i_2}),\
+    (\mi{place}, \ocs{o_3}{i_3}),\
+    (\mi{pay}, \ocs{o_2}{\phantom{i_2}}),\
+    (\mi{ship}, \ocs{o_2}{i_2})\ \bigr\rangle.
+\end{aligned}
+\]
+For instance, $(\mi{place}, \ocs{o_1}{i_1})$ stands for
+$s_1 = ((\mi{place}, \{(o_1, \mi{order}, \bot), (i_1, \mi{item}, \bot)\},
+\emptyset), 1)$.
+The stream $S_{\mi{ex}}$ is well-formed.
+\end{example}
+
+\subsection{Buffers and Heuristics}
+\label{sec:framework:buffers}
+
+\begin{definition}[Buffer]
+\label{def:buffer}
+A buffer is a tuple $B = (K, V, c, H)$ with a set of keys $K$, a set of
+values $V$, a capacity $c \in \mathbb{N}$ with $c \ge 1$, and a heuristic $H$.
+Its content is a partial function $b \in K \pfun V$ with
+$|\mi{dom}(b)| \le c$.
+For a key $k \in K$ and a value $v \in V$,
+\[
+  \mi{ins}(b, k, v) =
+  \begin{cases}
+    b \oplus \{(k, v)\} & \text{if } k \in \mi{dom}(b) \ \vee\ |\mi{dom}(b)| < c,\\
+    (b \restr (\mi{dom}(b) \setminus \{x\})) \oplus \{(k, v)\}
+      & \text{otherwise,}
+  \end{cases}
+\]
+where $\rho$ is the history of $b$ and the key $x = H(\rho)$ is \emph{evicted}.
+\end{definition}
+
+\begin{definition}[History, Heuristic]
+\label{def:heuristic}
+Let $K$ be a set of keys and $V$ a set of values.
+A record $(e, k, v) \in \{\mi{ins}, \mi{evict}\} \times K \times V$
+states that key $k$ with value $v$ was inserted or evicted.
+The history of a buffer is a sequence $\rho = \la r_1, \dots, r_m \ra$, where
+$r_p$ is the sequence of records that the stream item at position $p$ caused in
+this buffer, and $m = |\rho|$ is the current position.
+For $k \in K$, $\rho_k$ is the sequence of positions at which $k$ was inserted
+since its last eviction, if any, and
+$\mi{keys}(\rho) = \{k \in K \mid \rho_k \neq \la \ra\}$ is the set of keys
+currently in the buffer.
+
+A heuristic is a function $H$ over histories that selects a key
+$H(\rho) \in \mi{keys}(\rho)$ for every history $\rho$ with
+$\mi{keys}(\rho) \neq \emptyset$.
+\end{definition}
+
+Any function over histories that selects a buffered key is a heuristic.
+A new heuristic is thus obtained by stating how it selects a key from $\rho$,
+without changing the buffers or the algorithm.
+For a key $k$, $\mi{first}(\rho_k)$ is the position at which it entered the
+buffer, $\mi{last}(\rho_k)$ is the position of its last insertion, and
+$|\rho_k|$ is its number of insertions.
+For instance, a buffer that stores the last activity of each object of
+$S_{\mi{ex}}$ has the following history after $s_3$:
+\[
+\begin{aligned}
+  \rho = \bigl\langle\
+  & \la (\mi{ins}, o_1, \mi{place}), (\mi{ins}, i_1, \mi{place}) \ra,\
+    \la (\mi{ins}, o_2, \mi{place}), (\mi{ins}, i_2, \mi{place}) \ra,\\
+  & \la (\mi{ins}, i_1, \mi{pick}) \ra\ \bigr\rangle.
+\end{aligned}
+\]
+Hence, $\rho_{o_1} = \la 1 \ra$, $\rho_{i_1} = \la 1, 3 \ra$, and
+$\mi{keys}(\rho) = \{o_1, o_2, i_1, i_2\}$.
+Table~\ref{tab:heuristics} defines the cache replacement strategies of Liss
+et al.~\cite{Liss2025} as such functions.
+For example, LRU selects $o_1$ for $\rho$, since it has the smallest last
+insertion.
+
+\begin{table}[t]
+\centering
+\caption{Cache replacement strategies of~\cite{Liss2025} as functions over the
+history $\rho$.
+Positions replace timestamps, and ties are broken by a fixed order on the keys.
+$\mi{norm}$ is the min-max normalization over $\mi{keys}(\rho)$.}
+\label{tab:heuristics}
+\begin{tabular}{@{}ll@{}}
+\toprule
+Heuristic & $H(\rho)$ \\
+\midrule
+FIFO & $\arg\min_{k \in \mi{keys}(\rho)} \mi{first}(\rho_k)$ \\
+LRU & $\arg\min_{k \in \mi{keys}(\rho)} \mi{last}(\rho_k)$ \\
+LFU & $\arg\min_{k \in \mi{keys}(\rho)} |\rho_k|$ \\
+LFU-DA & $\arg\min_{k \in \mi{keys}(\rho)}
+  \mi{norm}(\mi{first}(\rho_k)) + \mi{norm}(|\rho_k|)$ \\
+Random & seeded random key of $\mi{keys}(\rho)$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+M\"uhlmeyer et al.~\cite{Muehlmeyer2026} evict an object once its inactivity
+exceeds a lifetime that is estimated from its last activity.
+We transfer this idea to fixed capacities: a full buffer evicts the object
+that exceeds its estimated lifetime the most.
+
+\begin{definition}[Lifecycle Heuristic]
+\label{def:lifecycle}
+Let $T_{\mi{int}}, T_{\max}, c_{\mi{hist}} \in \mathbb{N}$ with
+$T_{\mi{int}} < T_{\max}$ and $c_{\mi{hist}} \ge 1$, and let $\rho$ be the history of a buffer whose values are pairs
+$(\mi{ot}, a)$ of an object type and a last activity.
+For $o \in \mi{keys}(\rho)$, let $\mi{val}_\rho(o)$ be the value of the last
+insertion of $o$.
+The lifecycle heuristic is
+\[
+  H_{\mi{LC}}(\rho) = \arg\max_{o \in \mi{keys}(\rho)}
+    \frac{|\rho| - \mi{last}(\rho_o)}{\mi{life}_\rho(\mi{val}_\rho(o))},
+\]
+where $\mi{life}_\rho(\mi{ot}, a) \in [T_{\mi{int}} + 1, T_{\max}]$ is the
+expected lifetime of~\cite{Muehlmeyer2026}, estimated from a histogram of the
+evictions in $\rho$ with capacity $c_{\mi{hist}}$
+(Definition~\ref{def:life} in Appendix~\ref{app:framework}).
+\end{definition}
+
+The expected lifetime is short if $a$ often ends lifecycles of type
+$\mi{ot}$.
+A ratio above~$1$ means that an object has been inactive for longer than
+expected, and such objects are evicted first.
+In contrast to~\cite{Muehlmeyer2026}, nothing is evicted before a buffer is
+full, and the histogram has a fixed capacity, so the memory stays bounded.
+If the capacity covers all pairs of object types and activities, the histogram
+counts all evictions.
+
+\subsection{Streaming Algorithms}
+\label{sec:framework:algorithms}
+
+\begin{definition}[Streaming Algorithm]
+\label{def:algorithm}
+Let $\Umod$ be a universe of models.
+A streaming algorithm is a tuple $A = (B_1, \dots, B_n, \mi{upd}, \mi{emit})$
+with buffers $B_1, \dots, B_n$ and two functions on their contents
+$\mathbf{b} = (b_1, \dots, b_n)$:
+\begin{itemize}
+  \item $\mi{upd}(\mathbf{b}, s)$ yields the contents after processing item
+        $s \in \Uitem$.
+        They result from $\mathbf{b}$ by finitely many applications of
+        $\mi{ins}$.
+  \item $\mi{emit}(\mathbf{b}) \in \Umod$ yields the current model.
+\end{itemize}
+\end{definition}
+
+\begin{definition}[Run]
+\label{def:run}
+Let $S = \la s_1, s_2, \dots \ra$ be an object-centric event stream and let
+$A = (B_1, \dots, B_n, \mi{upd}, \mi{emit})$ be a streaming algorithm.
+The run of $A$ on $S$ is the sequence $\la \mathbf{b}_0, \mathbf{b}_1, \dots \ra$
+with $\mathbf{b}_0 = (\emptyset, \dots, \emptyset)$ and
+$\mathbf{b}_i = \mi{upd}(\mathbf{b}_{i-1}, s_i)$ for $i \ge 1$.
+The model after $s_i$ is $\mi{emit}(\mathbf{b}_i)$.
+The history of each buffer starts empty.
+Before $s_i$ is processed, an empty sequence is appended to it, and every
+insertion and eviction appends its record to that sequence.
+The unbounded run of $A$ on $S$ processes $S$ in the same way without
+capacities, so it never evicts.
+\end{definition}
+
+The capacities cap the memory of a run.
+Since $\mi{ins}$ never exceeds a capacity, an algorithm with
+buffer capacities $c_1, \dots, c_n$ stores at most $\sum_{j=1}^{n} c_j$ entries at any time, regardless of the length of the
+stream.
+The history is only a means of definition and is not stored.
+FIFO, LRU, LFU, and LFU-DA keep at most two numbers per buffered key, and the
+lifecycle heuristic keeps one number per buffered key and at most
+$c_{\mi{hist}}$ histogram entries.
+
+Since $\mi{upd}$ only inserts keys, a key leaves a buffer only through an
+eviction.
+Hence, the optional buffer synchronization of Liss et al.~\cite{Liss2025},
+which removes the entries of objects or object types that are not present in
+all buffers, cannot be represented in the framework.
+
+\begin{example}[Bounded Run]
+\label{ex:run}
+Consider the directly-follows algorithm $A_{\mi{df}}$
+(Definition~\ref{def:dfg} in Appendix~\ref{app:framework}).
+Its buffer $B_{\mi{obj}}$ stores the type and last activity of each object,
+and $B_{\mi{arc}}$, $B_{\mi{start}}$, and $B_{\mi{end}}$ count arcs, start
+activities, and the objects ending with an activity.
+An object in $B_{\mi{obj}}$ contributes an arc from its last to the current
+activity, and any other object is treated as new and contributes a start
+activity.
+We run $A_{\mi{df}}$ on $S_{\mi{ex}}$ with capacity~$4$ and LRU for
+$B_{\mi{obj}}$, and capacity~$10$ and LRU for the other buffers, which never
+become full.
+Ties are broken by the order $o_1, o_2, o_3, i_1, i_2, i_3$.
+After $s_6$, $B_{\mi{obj}}$ holds $o_1, o_2, i_1, i_2$, last inserted at the
+positions $5, 2, 5, 6$.
+At $s_7$, inserting $o_3$ evicts $o_2$, and inserting $i_3$ evicts $o_1$.
+At $s_8$, $o_2$ is treated as a new object, and inserting it evicts $i_1$.
+Compared to the offline model, the result contains the false start activity
+$\mi{pay}$ for orders.
+Two further errors are masked: $o_1$ also contributes the arc of $o_2$ from
+$\mi{place}$ to $\mi{pay}$, and the false end activity $\mi{place}$ of $o_2$
+is also the current activity of $o_3$.
+
+The lifecycle heuristic with $T_{\mi{int}} = 200$, $T_{\max} = 2000$, and
+$c_{\mi{hist}} = 10$ also evicts $o_2$ first.
+This eviction counts $\mi{place}$ as an end activity of orders, which lowers
+the confidence that $\mi{ship}$ ends an order.
+Hence, $o_1$ gets a longer expected lifetime than $i_1$, and $i_1$ is evicted
+at $s_7$ and $o_1$ at $s_8$.
+The model is the same, but the premature eviction of $o_2$ has misled the
+heuristic.
+\end{example}
+
+\subsection{Premature Evictions}
+\label{sec:framework:premature}
+
+\begin{definition}[Premature Eviction]
+\label{def:premature}
+Let $B$ be a buffer of a streaming algorithm $A$ and consider a run of $A$ on
+a stream $S$.
+An eviction of a key $k$ from $B$ is premature if and only if $k$ is inserted
+into $B$ again after this eviction.
+\end{definition}
+
+In Example~\ref{ex:run}, the eviction of $o_2$ is premature, while the
+evictions of $o_1$ and $i_1$ are not.
+
+\begin{proposition}[Correctness of Bounded Runs]
+\label{prop:correctness}
+Let $A$ be a streaming algorithm, let $S$ be an object-centric event stream,
+and let $\la \mathbf{b}_0, \mathbf{b}_1, \dots \ra$ and
+$\la \mathbf{b}_0^\infty, \mathbf{b}_1^\infty, \dots \ra$ be the run and the
+unbounded run of $A$ on $S$.
+Let $i \ge 0$ and assume that
+\begin{enumerate}
+  \item[(i)] $\mi{upd}$ reads only keys that it subsequently inserts, and
+  \item[(ii)] $\mi{emit}$ reads only buffers that do not evict while
+        processing $s_1, \dots, s_i$.
+\end{enumerate}
+If no key evicted while processing $s_1, \dots, s_i$ is inserted again while
+processing these items, then
+$\mi{emit}(\mathbf{b}_i) = \mi{emit}(\mathbf{b}_i^\infty)$.
+\end{proposition}
+
+Condition~(i) ensures that every use of an evicted key is a premature
+eviction.
+Condition~(ii) excludes buffers that hold the model itself, since evicting from
+them loses information even if the eviction is not premature.
+Appendix~\ref{app:framework} contains the proof.
+$A_{\mi{df}}$ satisfies~(i), and it satisfies~(ii) if $B_{\mi{arc}}$,
+$B_{\mi{start}}$, and $B_{\mi{end}}$ do not evict.
+Its unbounded run yields the offline model, so it then yields exactly the
+offline model if no key is evicted prematurely
+(Proposition~\ref{prop:dfg} in Appendix~\ref{app:framework}).
+The capacity these three buffers need depends on the numbers of activities and
+object types, but not on the number of objects.
+Liss et al.~\cite{Liss2025} instead store the arcs as rows, one per object and
+event, so their arc buffer fills quickly and loses arcs.
+
+The important factors of algorithms in this framework are thus the choice of
+capacity and especially the eviction heuristic, as model errors result from
+premature evictions once the buffers holding the model are large enough.
+In the following evaluation, we test several heuristics for online discovery
+algorithms and compare the resulting models to the offline discovery.
+Moreover, we compute the fraction of prematurely evicted keys.

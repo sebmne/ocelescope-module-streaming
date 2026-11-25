@@ -1,177 +1,176 @@
-"""Bounded key-value buffers."""
+"""Buffers (paper, Definition "Buffer") and their histories.
 
-from collections.abc import Iterator
-from collections.abc import Set as AbstractSet
+A buffer B = (K, V, c, H) holds a partial function b: K -> V with at most c keys. It changes
+through two operations:
+
+- ins(b, k, v): if k is buffered or the buffer is not full, k is set to v; otherwise the heuristic
+  H selects a buffered key x = H(rho) from the history rho of the buffer, x is evicted, and k is
+  set to v. The evicted entry (x, b(x)) is returned to the algorithm.
+- del(b, k): removes k, if it is buffered. Algorithms use it optionally, e.g. to keep two buffers
+  consistent after an eviction (the coupled removal of Liss et al.).
+
+The history rho is not stored. Instead, the buffer reports every record of rho to its heuristic as
+it happens (`Heuristic.on_insert`, `Heuristic.on_evict` and `Heuristic.on_delete`), and the heuristic keeps whatever it
+needs of rho in its own bounded, private buffers. The position m = |rho| is the position of the
+current stream item, given by a `Clock` that the run advances before each item.
+"""
+
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
-from datetime import datetime
-from typing import TYPE_CHECKING, Any, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar
 
 if TYPE_CHECKING:
-    from ocelescope_module_streaming.framework.algorithm import StreamingAlgorithm
     from ocelescope_module_streaming.framework.heuristic import Heuristic
 
 K = TypeVar("K")
 V = TypeVar("V")
 
 
-@dataclass(slots=True)
-class Entry(Generic[V]):
-    """A buffered value with its bookkeeping.
+class Clock:
+    """The position of the current stream item, shared by all buffers of a run.
 
-    Positions are used instead of timestamps: since timestamps never decrease, both induce the
-    same order on entries.
-
-    Attributes:
-        value: The buffered value.
-        first: The position at which the key was first written.
-        last: The position at which the key was last written.
-        freq: The number of writes to the key.
+    Before item s_i is processed, the run advances the clock to i, which appends the empty
+    sequence r_i to the history of every buffer.
     """
 
-    value: V
-    first: int
-    last: int
-    freq: int
+    def __init__(self) -> None:
+        self.position = 0
+
+    def advance(self) -> int:
+        self.position += 1
+        return self.position
 
 
 @dataclass(frozen=True, slots=True)
-class BufferConfig:
-    """Configuration of a single buffer.
+class Record:
+    """A record (e, k, v) of a history, with the position of the item that caused it."""
 
-    Attributes:
-        capacity: The maximum number of entries, or None for an unbounded buffer.
-        heuristic: The eviction heuristic. Required if `capacity` is set.
+    kind: Literal["ins", "evict", "del"]
+    key: Any
+    value: Any
+    position: int
 
-    Raises:
-        ValueError: If `capacity` is negative, or set without a `heuristic`.
-    """
 
-    capacity: int | None = None
-    heuristic: "Heuristic | None" = None
+class HeuristicError(RuntimeError):
+    """Raised when a heuristic selects a key that is not buffered."""
 
-    def __post_init__(self) -> None:
-        if self.capacity is not None and self.capacity < 0:
-            raise ValueError("A capacity must not be negative.")
-        if self.capacity is not None and self.heuristic is None:
-            raise ValueError("A bounded buffer needs a heuristic.")
+
+Listener = Callable[[Record], None]
 
 
 class Buffer(Generic[K, V]):
-    """A key-value store holding at most `capacity` entries after each step of a run.
-
-    Writing a key with `put` marks it as touched for the current step; touched keys are never
-    evicted in the same step. If a single item touches more keys than the capacity allows, the
-    buffer remains over capacity until the next step.
+    """A buffer with a capacity and an eviction heuristic.
 
     Args:
-        name: The buffer name, used to configure it.
-        config: The capacity and heuristic of the buffer.
-
-    Attributes:
-        name: The buffer name.
-        capacity: The maximum number of entries, or None if unbounded.
-        heuristic: The eviction heuristic, or None if unbounded.
+        name: The name of the buffer, unique within its algorithm.
+        capacity: The capacity c >= 1, or None for the unbounded run, which never evicts.
+        heuristic: The heuristic H. It must be used by this buffer only.
+        clock: The clock of the run.
     """
 
-    def __init__(self, name: str, config: BufferConfig = BufferConfig()) -> None:
+    def __init__(self, name: str, capacity: int | None, heuristic: "Heuristic[K, V]", clock: Clock) -> None:
+        if capacity is not None and capacity < 1:
+            raise ValueError(f"Buffer {name}: the capacity must be at least 1, not {capacity}")
         self.name = name
-        self.capacity = config.capacity
-        self.heuristic = config.heuristic
-        self._entries: dict[K, Entry[V]] = {}
-        self._touched: set[K] = set()
-        self._position = 0
+        self.capacity = capacity
+        self.heuristic = heuristic
+        self.clock = clock
+        self.listeners: list[Listener] = []
+        self._content: dict[K, V] = {}
 
-    # Access, used by algorithms.
-
-    def get(self, key: K, default: V | None = None) -> V | None:
-        """Returns the value stored under `key`, or `default` if absent. Does not touch the key."""
-        entry = self._entries.get(key)
-        return default if entry is None else entry.value
-
-    def entry(self, key: K) -> Entry[V] | None:
-        """Returns the entry stored under `key`, including its bookkeeping, or None if absent."""
-        return self._entries.get(key)
-
-    def put(self, key: K, value: V) -> None:
-        """Stores `value` under `key`, updates its bookkeeping and marks the key as touched."""
-        entry = self._entries.get(key)
-        if entry is None:
-            self._entries[key] = Entry(value, self._position, self._position, 1)
-        else:
-            entry.value, entry.last, entry.freq = value, self._position, entry.freq + 1
-        self._touched.add(key)
-
-    def discard(self, key: K) -> V | None:
-        """Removes `key` without triggering eviction handling.
-
-        Intended for removing dependent entries, e.g. from another buffer's
-        `StreamingAlgorithm.finish`.
-
-        Returns:
-            The removed value, or None if `key` was absent.
-        """
-        entry = self._entries.pop(key, None)
-        self._touched.discard(key)
-        return None if entry is None else entry.value
-
-    def __contains__(self, key: object) -> bool:
-        return key in self._entries
+    # Reading
 
     def __len__(self) -> int:
-        return len(self._entries)
+        return len(self._content)
 
-    def __iter__(self) -> Iterator[K]:
-        return iter(self._entries)
+    def __contains__(self, key: object) -> bool:
+        return key in self._content
+
+    def __getitem__(self, key: K) -> V:
+        return self._content[key]
+
+    def get(self, key: K, default: Any = None) -> Any:
+        return self._content.get(key, default)
+
+    def keys(self) -> Iterator[K]:
+        return iter(self._content)
 
     def items(self) -> Iterator[tuple[K, V]]:
-        """Returns an iterator over ``(key, value)`` pairs in insertion order."""
-        return ((key, entry.value) for key, entry in self._entries.items())
+        return iter(self._content.items())
+
+    def values(self) -> Iterator[V]:
+        return iter(self._content.values())
 
     @property
-    def touched(self) -> AbstractSet[K]:
-        """The keys written in the current step (read-only view)."""
-        return self._touched
+    def content(self) -> Mapping[K, V]:
+        """A read-only view of the content b."""
+        return self._content
 
-    # Eviction, used by the run loop.
+    @property
+    def full(self) -> bool:
+        return self.capacity is not None and len(self._content) >= self.capacity
 
-    def start_step(self, position: int) -> None:
-        """Begins the step for the item at `position` and clears the touched keys."""
-        self._position = position
-        self._touched.clear()
+    # Writing
 
-    def over_capacity(self) -> bool:
-        """Returns whether the buffer holds more entries than its capacity."""
-        return self.capacity is not None and len(self._entries) > self.capacity
-
-    def victim(self, algorithm: "StreamingAlgorithm[Any]", position: int, timestamp: datetime) -> K | None:
-        """Selects the key to evict next.
-
-        Ties are broken in favor of the key that was inserted first.
-
-        Args:
-            algorithm: The algorithm owning the buffer, passed to the heuristic.
-            position: The position of the current item.
-            timestamp: The timestamp of the current item.
+    def ins(self, key: K, value: V) -> tuple[K, V] | None:
+        """ins(b, k, v): sets `key` to `value`, evicting the key the heuristic selects if needed.
 
         Returns:
-            The untouched key with the highest heuristic score, or None if every key was
-            touched in the current step.
-        """
-        assert self.heuristic is not None, "only bounded buffers evict"
-        best: K | None = None
-        best_score = float("-inf")
-        for key, entry in self._entries.items():
-            if key in self._touched:
-                continue
-            score = self.heuristic.score(key, entry, algorithm, position, timestamp)
-            if best is None or score > best_score:
-                best, best_score = key, score
-        return best
-
-    def pop(self, key: K) -> V:
-        """Removes `key` and returns its value.
+            The evicted entry (x, b(x)), or None if nothing was evicted.
 
         Raises:
-            KeyError: If `key` is absent.
+            HeuristicError: If the heuristic selects a key that is not buffered.
         """
-        return self._entries.pop(key).value
+        position = self.clock.position
+        evicted: tuple[K, V] | None = None
+        new = key not in self._content
+        if new and self.full:
+            victim = self.heuristic.select(position)
+            if victim not in self._content:
+                raise HeuristicError(
+                    f"Buffer {self.name}: {self.heuristic.name} selected {victim!r}, which is not buffered"
+                )
+            evicted = (victim, self._content.pop(victim))
+            self.heuristic.on_evict(victim, evicted[1], position)
+            self._notify(Record("evict", victim, evicted[1], position))
+        self._content[key] = value
+        self.heuristic.on_insert(key, value, position, new)
+        self._notify(Record("ins", key, value, position))
+        return evicted
+
+    def delete(self, key: K) -> V | None:
+        """del(b, k): removes `key` if it is buffered.
+
+        Returns:
+            The removed value, or None if `key` was not buffered.
+        """
+        if key not in self._content:
+            return None
+        position = self.clock.position
+        value = self._content.pop(key)
+        self.heuristic.on_delete(key, value, position)
+        self._notify(Record("del", key, value, position))
+        return value
+
+    def _notify(self, record: Record) -> None:
+        for listener in self.listeners:
+            listener(record)
+
+    # Structure
+
+    @property
+    def memory(self) -> float:
+        """The capacity of this buffer plus that of all private buffers of its heuristic."""
+        own = float("inf") if self.capacity is None else self.capacity
+        return own + self.heuristic.memory
+
+    def walk(self, prefix: str = "") -> Iterator[tuple[str, "Buffer[Any, Any]"]]:
+        """Yields this buffer and the buffers of its heuristic (recursively) with path names."""
+        path = f"{prefix}{self.name}"
+        yield path, self
+        for private in self.heuristic.private_buffers():
+            if isinstance(private, Buffer):
+                yield from private.walk(f"{path}/")
+
+    def __repr__(self) -> str:
+        return f"Buffer({self.name!r}, {len(self)}/{self.capacity}, {self.heuristic.name})"

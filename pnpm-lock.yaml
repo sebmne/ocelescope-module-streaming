@@ -33,6 +33,9 @@ catalogs:
     '@mantine/hooks':
       specifier: ^9.7.4
       version: 9.7.4
+    '@ocelescope/api-base':
+      specifier: ^0.12.0
+      version: 0.12.0
     '@ocelescope/api-client':
       specifier: ^0.12.0
       version: 0.12.0
@@ -54,18 +57,6 @@ catalogs:
     '@ocelescope/resources':
       specifier: ^0.12.0
       version: 0.12.0
-    '@rjsf/core':
-      specifier: ^6.8.0
-      version: 6.11.1
-    '@rjsf/mantine':
-      specifier: ^6.11.0
-      version: 6.11.1
-    '@rjsf/utils':
-      specifier: ^6.8.0
-      version: 6.11.1
-    '@rjsf/validator-ajv8':
-      specifier: ^6.8.0
-      version: 6.11.1
     '@tanstack/react-query':
       specifier: ^5.105.0
       version: 5.105.0
@@ -161,6 +152,9 @@ importers:
       '@mantine/hooks':
         specifier: 'catalog:'
         version: 9.7.4(react@19.3.1)
+      '@ocelescope/api-base':
+        specifier: 'catalog:'
+        version: 0.12.0(@ocelescope/api-client@0.12.0(axios@1.21.0(debug@4.4.3))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(zod@4.6.7)(zustand@5.0.16(@types/react@19.3.0)(react@19.3.1)(use-sync-external-store@1.7.0(react@19.3.1))))(@tanstack/react-query@5.105.0(@types/react@19.3.0)(react@19.3.1))(axios@1.21.0(debug@4.4.3))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       '@ocelescope/api-client':
         specifier: 'catalog:'
         version: 0.12.0(axios@1.21.0(debug@4.4.3))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(zod@4.6.7)(zustand@5.0.16(@types/react@19.3.0)(react@19.3.1)(use-sync-external-store@1.7.0(react@19.3.1)))
@@ -173,18 +167,6 @@ importers:
       '@ocelescope/resources':
         specifier: 'catalog:'
         version: 0.12.0(3cbe1f6a468eae40d60c2d8f5eaffa32)
-      '@rjsf/core':
-        specifier: 'catalog:'
-        version: 6.11.1(@rjsf/utils@6.11.1(react@19.3.1))(react@19.3.1)(solid-js@1.9.15)
-      '@rjsf/mantine':
-        specifier: 'catalog:'
-        version: 6.11.1(@mantine/core@9.7.4(@mantine/hooks@9.7.4(react@19.3.1))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(@mantine/dates@9.7.5(@mantine/core@9.7.4(@mantine/hooks@9.7.4(react@19.3.1))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(@mantine/hooks@9.7.4(react@19.3.1))(dayjs@1.11.23)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(@mantine/hooks@9.7.4(react@19.3.1))(@rjsf/core@6.11.1(@rjsf/utils@6.11.1(react@19.3.1))(react@19.3.1)(solid-js@1.9.15))(@rjsf/utils@6.11.1(react@19.3.1))(react@19.3.1)
-      '@rjsf/utils':
-        specifier: 'catalog:'
-        version: 6.11.1(react@19.3.1)
-      '@rjsf/validator-ajv8':
-        specifier: 'catalog:'
-        version: 6.11.1(@rjsf/utils@6.11.1(react@19.3.1))
       '@tanstack/react-query':
         specifier: 'catalog:'
         version: 5.105.0(@types/react@19.3.0)(react@19.3.1)

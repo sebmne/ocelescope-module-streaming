@@ -1,52 +1,65 @@
-"""Validation of well-formed streams."""
+"""Well-formedness of streams (paper, Definition "Object-Centric Event Stream").
+
+A stream is well-formed if (i) its timestamps never decrease and (ii) every object always has the
+same type. Checking (ii) needs the type of every object seen so far, so the checker uses memory
+that grows with the stream. It is a tool for validating inputs, not part of any algorithm.
+"""
 
 from collections.abc import Iterable, Iterator
-from datetime import datetime
 
-from ocelescope_module_streaming.stream.items import StreamItem
+from ocelescope_module_streaming.stream.items import StreamItem, Timestamp, tobj
 
 
-class MalformedStream(ValueError):
-    """Raised when a stream item violates a well-formedness condition.
+class NotWellFormed(ValueError):
+    """Raised for the first item that violates well-formedness.
 
     Attributes:
-        position: The 1-based position of the offending item.
-        reason: A description of the violation.
+        position: The position of the item, starting at 1.
     """
 
     def __init__(self, position: int, reason: str) -> None:
         super().__init__(f"Item {position}: {reason}")
         self.position = position
-        self.reason = reason
+
+
+class WellFormednessChecker:
+    """Checks the items of a stream one at a time."""
+
+    def __init__(self) -> None:
+        self.position = 0
+        self._last: Timestamp | None = None
+        self._types: dict[str, str] = {}
+
+    def check(self, item: StreamItem) -> None:
+        """Checks the next item.
+
+        Raises:
+            NotWellFormed: If the item has an earlier timestamp than its predecessor, or gives an
+                object a different type than an earlier item.
+        """
+        self.position += 1
+        if self._last is not None and item.t < self._last:  # type: ignore[operator]
+            raise NotWellFormed(self.position, f"timestamp {item.t} is before {self._last}")
+        self._last = item.t
+        for o, ot in tobj(item):
+            known = self._types.setdefault(o, ot)
+            if known != ot:
+                raise NotWellFormed(self.position, f"object {o} has type {ot}, but had type {known} before")
 
 
 def well_formed(stream: Iterable[StreamItem]) -> Iterator[StreamItem]:
-    """Lazily validates a stream while passing its items through.
-
-    A stream is well-formed if (i) timestamps never decrease and (ii) every object keeps the
-    same type across all items. Items are yielded unchanged as they are validated, so items
-    before a violation have already been yielded when the error is raised.
-
-    Memory grows with the number of distinct objects, since the type of every object is
-    retained. Intended for tests and evaluation, not for bounded runs.
-
-    Args:
-        stream: The stream to validate.
-
-    Yields:
-        The items of `stream`, unchanged.
-
-    Raises:
-        MalformedStream: If an item violates condition (i) or (ii).
-    """
-    last: datetime | None = None
-    types: dict[str, str] = {}
-    for position, item in enumerate(stream, start=1):
-        if last is not None and item.t < last:
-            raise MalformedStream(position, f"timestamp {item.t} is before {last}")
-        last = item.t
-        for obj in item.x.objects:
-            known = types.setdefault(obj.id, obj.type)
-            if known != obj.type:
-                raise MalformedStream(position, f"object {obj.id} has type {obj.type}, but earlier {known}")
+    """Passes the items of `stream` through and raises `NotWellFormed` on the first violation."""
+    checker = WellFormednessChecker()
+    for item in stream:
+        checker.check(item)
         yield item
+
+
+def is_well_formed(stream: Iterable[StreamItem]) -> bool:
+    """Returns whether a finite stream is well-formed."""
+    try:
+        for _ in well_formed(stream):
+            pass
+    except NotWellFormed:
+        return False
+    return True

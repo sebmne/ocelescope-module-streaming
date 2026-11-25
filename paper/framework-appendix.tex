@@ -1,0 +1,211 @@
+% ---------------------------------------------------------------------------
+% Appendix to the framework chapter (framework.tex). Uses the same macros.
+% ---------------------------------------------------------------------------
+
+\section{Details of the Framework}
+\label{app:framework}
+
+\subsection{Expected Lifetime}
+
+\begin{definition}[Expected Lifetime]
+\label{def:life}
+Let $T_{\mi{int}}, T_{\max}, c_{\mi{hist}} \in \mathbb{N}$ with
+$T_{\mi{int}} < T_{\max}$ and $c_{\mi{hist}} \ge 1$, let $z > 0$, and let
+$\rho$ be a history.
+The histogram $g_\rho$ is the content of a buffer
+$(\Utype \times \Uact, \mathbb{N}, c_{\mi{hist}}, H_{\mi{LFU}})$ after
+inserting, for each evict record in $\rho$ in order, its value $y$ with count
+$g[y] + 1$, where $g$ is the current content.
+For $\mi{ot} \in \Utype$ and $a \in \Uact$, let
+$n = \sum_{a' \in \Uact} g_\rho[(\mi{ot}, a')]$,
+$n_a = g_\rho[(\mi{ot}, a)]$, and
+\[
+  \pi = \frac{n_a + 1}{n + 2}, \qquad
+  v = \frac{(n_a + 1)(n - n_a + 1)}{(n + 2)^2 (n + 3)}, \qquad
+  \kappa = \max\bigl(0,\ \pi - z \sqrt{v}\bigr).
+\]
+The expected lifetime is
+\[
+  \mi{life}_\rho(\mi{ot}, a) =
+  \begin{cases}
+    T_{\max} & \text{if } \kappa = 0,\\
+    T_{\mi{int}} + 1 & \text{if } \kappa \ge 0.9999,\\
+    T_{\mi{int}} + \bigl\lceil (T_{\max} - T_{\mi{int}}) \cdot
+      0.95^{\kappa / (1 - \kappa)} \bigr\rceil & \text{otherwise.}
+  \end{cases}
+\]
+\end{definition}
+
+The confidence $\kappa$ is the lower bound of the Beta-binomial credible
+interval of~\cite{Muehlmeyer2026} that $a$ ends a lifecycle of type
+$\mi{ot}$.
+We use $z = 1$ as in~\cite{Muehlmeyer2026}.
+
+\subsection{Correctness of Bounded Runs}
+
+For contents $\mathbf{b}$ and an item $s$, $\mi{upd}$ applies a sequence
+$\omega$ of insertions, each given by its buffer, key, and value.
+Let $T(\omega)$ be the set of pairs $(j, k)$ such that $\omega$ inserts $k$
+into $B_j$.
+Two contents coincide on $T(\omega)$ if, for all $(j, k) \in T(\omega)$, $k$
+is missing in both $b_j$ and $b_j'$, or $b_j(k) = b_j'(k)$.
+Conditions~(i) and~(ii) of Proposition~\ref{prop:correctness} are formally:
+\begin{enumerate}
+  \item[(i)] If $\mi{upd}$ applies $\omega$ to $\mathbf{b}$ and $s$, and no key
+        of $T(\omega)$ is evicted before its last insertion in $\omega$, then
+        $\mi{upd}$ applies $\omega$ to $\mathbf{b}'$ and $s$ for all
+        $\mathbf{b}'$ that coincide with $\mathbf{b}$ on $T(\omega)$, as long
+        as no key of $T(\omega)$ is evicted before its last insertion.
+  \item[(ii)] $\mi{emit}(\mathbf{b}) = \mi{emit}(\mathbf{b}')$ for all
+        $\mathbf{b}, \mathbf{b}'$ with $b_j = b_j'$ for every $B_j$ that does
+        not evict while processing $s_1, \dots, s_i$.
+\end{enumerate}
+
+\begin{proof}[Proof of Proposition~\ref{prop:correctness}]
+For $p \le i$, let $X_p$ be the set of pairs $(j, k)$ such that $k$ was evicted
+from $B_j$ while processing $s_1, \dots, s_p$.
+We show by induction on $p$ that $\mathbf{b}_p$ results from
+$\mathbf{b}_p^\infty$ by removing the keys of $X_p$.
+For $p = 0$, all contents are empty.
+
+Let $p \ge 1$ and let the run apply $\omega$ to $\mathbf{b}_{p-1}$ and $s_p$.
+By assumption, $T(\omega)$ contains no pair of $X_{p-1}$, and no key of
+$T(\omega)$ is evicted before its last insertion in $\omega$.
+By the induction hypothesis, $\mathbf{b}_{p-1}$ and $\mathbf{b}_{p-1}^\infty$
+coincide on $T(\omega)$.
+The unbounded run does not evict, so by~(i), it also applies $\omega$.
+Consider a pair $(j, k)$.
+If $(j, k) \in X_p$, then $k$ is missing in $b_{p, j}$, because it is not
+inserted again after its eviction.
+Otherwise, $k$ is not evicted while processing $s_p$.
+If $(j, k) \in T(\omega)$, both runs apply the same insertions to $k$, starting
+from the same entry.
+If $(j, k) \notin T(\omega)$, its entry does not change in either run.
+In both cases, $k$ has the same entry in $\mathbf{b}_p$ and
+$\mathbf{b}_p^\infty$.
+
+For every $B_j$ that does not evict while processing $s_1, \dots, s_i$, $X_i$
+contains no pair with $j$, so $b_{i, j} = b_{i, j}^\infty$.
+By~(ii), $\mi{emit}(\mathbf{b}_i) = \mi{emit}(\mathbf{b}_i^\infty)$.
+\end{proof}
+
+\subsection{Correctness of the Directly-Follows Algorithm}
+
+\begin{definition}[Streaming Directly-Follows Algorithm]
+\label{def:dfg}
+$A_{\mi{df}}$ is the directly-follows part of~\cite{Muehlmeyer2026}.
+It has four buffers: $B_{\mi{obj}}$ maps each object to its type and last
+activity, $B_{\mi{arc}}$ counts arcs, $B_{\mi{start}}$ counts start activities,
+and $B_{\mi{end}}$ counts the objects ending with an activity.
+For a content $b$ with values in $\mathbb{N}$, let $b[k] = b(k)$ if
+$k \in \mi{dom}(b)$ and $b[k] = 0$ otherwise.
+Let $\mi{inc}(b, k) = \mi{ins}(b, k, b[k] + 1)$, and let
+$\mi{dec}(b, k) = \mi{ins}(b, k, \max(b[k] - 1, 0))$.
+Algorithm~\ref{alg:dfg} defines $\mi{upd}$, and
+$\mi{emit}(\mathbf{b}) = (\mi{dom}(b_{\mi{arc}}), \mi{dom}(b_{\mi{start}}),
+\{k \in \mi{dom}(b_{\mi{end}}) \mid b_{\mi{end}}(k) > 0\})$.
+Since $B_{\mi{end}}$ is updated with every event, evicting an object requires
+no further handling.
+\end{definition}
+
+\begin{algorithm}[t]
+\caption{The function $\mi{upd}$ of $A_{\mi{df}}$.
+Buffered objects are processed first, so that their entries are the most
+recent ones when new objects are inserted.}
+\label{alg:dfg}
+\begin{algorithmic}[1]
+\Function{upd}{$(b_{\mi{obj}}, b_{\mi{arc}}, b_{\mi{start}}, b_{\mi{end}}), s$}
+  \If{$s$ is an event item $((a, R, d), t)$}
+    \State $T_{\mi{old}} \gets \{(o, \mi{ot}) \in \mi{tobj}(s) \mid
+           o \in \mi{dom}(b_{\mi{obj}})\}$
+    \State $T_{\mi{new}} \gets \mi{tobj}(s) \setminus T_{\mi{old}}$
+    \For{$(o, \mi{ot}) \in T_{\mi{old}}$}
+      \State let $b_{\mi{obj}}(o) = (\mi{ot}, a')$
+      \State $b_{\mi{arc}} \gets \mi{inc}(b_{\mi{arc}}, (a', a, \mi{ot}))$
+      \State $b_{\mi{end}} \gets \mi{dec}(b_{\mi{end}}, (\mi{ot}, a'))$
+      \State $b_{\mi{end}} \gets \mi{inc}(b_{\mi{end}}, (\mi{ot}, a))$
+      \State $b_{\mi{obj}} \gets \mi{ins}(b_{\mi{obj}}, o, (\mi{ot}, a))$
+    \EndFor
+    \For{$(o, \mi{ot}) \in T_{\mi{new}}$}
+      \State $b_{\mi{start}} \gets \mi{inc}(b_{\mi{start}}, (\mi{ot}, a))$
+      \State $b_{\mi{end}} \gets \mi{inc}(b_{\mi{end}}, (\mi{ot}, a))$
+      \State $b_{\mi{obj}} \gets \mi{ins}(b_{\mi{obj}}, o, (\mi{ot}, a))$
+    \EndFor
+  \EndIf
+  \State \Return $(b_{\mi{obj}}, b_{\mi{arc}}, b_{\mi{start}}, b_{\mi{end}})$
+\EndFunction
+\end{algorithmic}
+\end{algorithm}
+
+\begin{definition}[Offline Directly-Follows Model]
+\label{def:offline}
+Let $S$ be a well-formed object-centric event stream and $i \ge 0$.
+$O_i$ is the set of objects that occur in the events of $s_1, \dots, s_i$.
+For $o \in O_i$, $\sigma_o^i$ is the sequence of activities of these events
+that contain $o$.
+The offline model of $S_{\le i}$ is $\mi{disc}(S_{\le i}) = (D_i, F_i, L_i)$ with
+\begin{align*}
+  D_i &= \{(a, a', \mi{type}(o)) \mid o \in O_i \ \wedge\
+        \la a, a' \ra \text{ occurs consecutively in } \sigma_o^i\},\\
+  F_i &= \{(\mi{type}(o), \mi{first}(\sigma_o^i)) \mid o \in O_i\},
+  \text{ and}\\
+  L_i &= \{(\mi{type}(o), \mi{last}(\sigma_o^i)) \mid o \in O_i\}.
+\end{align*}
+\end{definition}
+
+\begin{proposition}[Correctness of $A_{\mi{df}}$]
+\label{prop:dfg}
+Let $S$ be a well-formed object-centric event stream, let
+$\la \mathbf{b}_0, \mathbf{b}_1, \dots \ra$ be the run of $A_{\mi{df}}$ on $S$,
+and let $i \ge 0$.
+If, while processing $s_1, \dots, s_i$, the buffers $B_{\mi{arc}}$,
+$B_{\mi{start}}$, and $B_{\mi{end}}$ never evict, and no key evicted from
+$B_{\mi{obj}}$ is inserted into $B_{\mi{obj}}$ again, then
+$\mi{emit}(\mathbf{b}_i) = \mi{disc}(S_{\le i})$.
+\end{proposition}
+
+\begin{proof}
+$A_{\mi{df}}$ satisfies condition~(i) of Proposition~\ref{prop:correctness}.
+For an event, $\mi{upd}$ reads whether and with which value the objects of the
+event are in $B_{\mi{obj}}$, and it reads the counts of the keys it increments
+or decrements.
+It subsequently inserts these objects and keys.
+Other items cause no insertions.
+Condition~(ii) holds, because $\mi{emit}$ reads only $B_{\mi{arc}}$,
+$B_{\mi{start}}$, and $B_{\mi{end}}$.
+Hence, $\mi{emit}(\mathbf{b}_i) = \mi{emit}(\mathbf{b}_i^\infty)$.
+
+It remains to show $\mi{emit}(\mathbf{b}_i^\infty) = \mi{disc}(S_{\le i})$.
+We show by induction on $p \le i$ that the contents
+$(b_{\mi{obj}}, b_{\mi{arc}}, b_{\mi{start}}, b_{\mi{end}}) = \mathbf{b}_p^\infty$
+satisfy
+\begin{enumerate}
+  \item[(a)] $\mi{dom}(b_{\mi{obj}}) = O_p$ and
+        $b_{\mi{obj}}(o) = (\mi{type}(o), \mi{last}(\sigma_o^p))$ for all
+        $o \in O_p$,
+  \item[(b)] $\mi{dom}(b_{\mi{arc}}) = D_p$ and
+        $\mi{dom}(b_{\mi{start}}) = F_p$, and
+  \item[(c)] $b_{\mi{end}}[(\mi{ot}, a)] = |\{o \in O_p \mid
+        \mi{type}(o) = \mi{ot} \ \wedge\ \mi{last}(\sigma_o^p) = a\}|$ for all
+        $(\mi{ot}, a)$, so $\{k \in \mi{dom}(b_{\mi{end}}) \mid b_{\mi{end}}(k) > 0\}
+        = L_p$.
+\end{enumerate}
+For $p = 0$, all sets are empty.
+Let $p \ge 1$.
+If $s_p$ is not an event, nothing changes.
+Otherwise, let $s_p$ have activity $a$.
+By~(a), $T_{\mi{old}}$ contains exactly the objects of $s_p$ in $O_{p-1}$, and
+$T_{\mi{new}}$ the objects that occur for the first time.
+For $(o, \mi{ot}) \in T_{\mi{old}}$, (a) yields
+$a' = \mi{last}(\sigma_o^{p-1})$.
+The first loop adds the new pair $(a', a, \mi{ot})$ to $B_{\mi{arc}}$ and moves
+one count from $(\mi{ot}, a')$ to $(\mi{ot}, a)$ in $B_{\mi{end}}$.
+By~(c), the count of $(\mi{ot}, a')$ is at least~$1$.
+For $(o, \mi{ot}) \in T_{\mi{new}}$, the second loop adds $(\mi{ot}, a)$ to
+$B_{\mi{start}}$ and increments its count in $B_{\mi{end}}$.
+Each object of $s_p$ is inserted with value $(\mi{type}(o), a)$, and the traces
+of all other objects are unchanged.
+This yields~(a), (b), and~(c) for $p$.
+For $p = i$, (b) and~(c) yield $\mi{emit}(\mathbf{b}_i^\infty) =
+(D_i, F_i, L_i)$.
+\end{proof}

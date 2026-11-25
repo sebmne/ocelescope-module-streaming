@@ -1,0 +1,59 @@
+\begin{definition}[Buffer]
+A buffer is a tuple $B = (K, V, c, H)$ with a set of keys $K$, a set of
+values $V$, a capacity $c \in \mathbb{N}$ with $c \ge 1$, and a heuristic $H$.
+Its content is a partial function $b \in K \pfun V$ with
+$|\mi{dom}(b)| \le c$.
+For a key $k \in K$ and a value $v \in V$,
+\[
+  \mi{del}(b, k) = b \restr (\mi{dom}(b) \setminus \{k\}),
+\]
+\[
+  \mi{ins}(b, k, v) =
+  \begin{cases}
+    b \oplus \{(k, v)\} & \text{if } k \in \mi{dom}(b) \ \vee\ |\mi{dom}(b)| < c,\\
+    \mi{del}(b, x) \oplus \{(k, v)\} & \text{otherwise,}
+  \end{cases}
+\]
+where $x = H(\rho)$ and $\rho$ is the history of $b$.
+\end{definition}
+
+\begin{definition}[History, Heuristic]
+Let $K$ be a set of keys and $V$ a set of values.
+A record $(e, k, v) \in \{\mi{ins}, \mi{evict}, \mi{del}\} \times K \times V$
+states that key $k$ with value $v$ was inserted, evicted, or deleted.
+A history is a sequence $\rho = \la r_1, \dots, r_m \ra$, where $r_p$ is the
+sequence of records of the item at position $p$, and $m = |\rho|$ is the
+current position.
+For $k \in K$, $\rho_k$ is the sequence of positions at which $k$ was inserted
+since it was last evicted or deleted, and
+$\mi{keys}(\rho) = \{k \in K \mid \rho_k \neq \la \ra\}$.
+
+A heuristic is a function $H$ that selects a key $H(\rho) \in \mi{keys}(\rho)$
+for every history $\rho$ with $\mi{keys}(\rho) \neq \emptyset$.
+\end{definition}
+
+\begin{definition}[Streaming Algorithm]
+Let $\Umod$ be a universe of models.
+A streaming algorithm is a tuple $A = (B_1, \dots, B_n, \mi{upd}, \mi{emit})$
+with buffers $B_1, \dots, B_n$ and two functions on their contents
+$\mathbf{b} = (b_1, \dots, b_n)$:
+\begin{itemize}
+  \item $\mi{upd}(\mathbf{b}, s)$ yields the contents after processing item
+        $s \in \Uitem$.
+        They result from $\mathbf{b}$ by finitely many applications of
+        $\mi{ins}$ and $\mi{del}$.
+  \item $\mi{emit}(\mathbf{b}) \in \Umod$ yields the current model.
+\end{itemize}
+\end{definition}
+
+\begin{definition}[Run]
+Let $S = \la s_1, s_2, \dots \ra$ be an object-centric event stream and let
+$A = (B_1, \dots, B_n, \mi{upd}, \mi{emit})$ be a streaming algorithm.
+The run of $A$ on $S$ is the sequence $\la \mathbf{b}_0, \mathbf{b}_1, \dots \ra$
+with $\mathbf{b}_0 = (\emptyset, \dots, \emptyset)$ and
+$\mathbf{b}_i = \mi{upd}(\mathbf{b}_{i-1}, s_i)$ for $i \ge 1$.
+The model after $s_i$ is $\mi{emit}(\mathbf{b}_i)$.
+The history of each buffer starts empty.
+Before $s_i$ is processed, an empty sequence is appended to it, and every
+insertion, eviction, and deletion appends its record to that sequence.
+\end{definition}

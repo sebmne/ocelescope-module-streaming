@@ -1,16 +1,17 @@
-from dataclasses import dataclass
+"""Which kinds of items a replay includes."""
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
-@dataclass(frozen=True, slots=True)
-class StreamOptions:
-    """Selects which item kinds a stream contains.
+class StreamOptions(BaseModel):
+    """The item kinds of a replayed stream.
 
-    Attributes:
-        events: Whether to include events.
-        object_to_object: Whether to include object-to-object updates.
-        attribute_updates: Whether to include attribute updates.
+    Leaving out kinds an algorithm ignores changes nothing in its buffers, but it changes the
+    positions of the remaining items, and positions are what heuristics measure time in.
     """
 
-    events: bool = True
-    object_to_object: bool = True
-    attribute_updates: bool = True
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    events: bool = Field(default=True, title="Events")
+    o2o_updates: bool = Field(default=True, title="O2O updates")
+    attribute_updates: bool = Field(default=False, title="Attribute updates")

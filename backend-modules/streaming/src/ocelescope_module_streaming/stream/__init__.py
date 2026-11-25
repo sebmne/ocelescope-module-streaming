@@ -1,38 +1,48 @@
-"""Object-centric event streams.
+"""Object-centric event streams: items, well-formedness and the replay of OCELs.
 
-A stream is an iterable of `StreamItem` pairs ``(x, t)``, consumed once from front to back.
-Sources produce streams lazily, so a stream may be infinite. Algorithms do not iterate streams
-themselves; the framework's run loop passes them one item at a time.
+`ocel_stream` and `stream_length` live in `stream.ocel`, the only part that needs Ocelescope.
 """
-
-from collections.abc import Iterable
 
 from ocelescope_module_streaming.stream.items import (
     AttributeUpdate,
-    AttributeValue,
     Content,
     Event,
     O2OUpdate,
-    ObjectRef,
     Relation,
     StreamItem,
+    Timestamp,
+    TypedObject,
+    Value,
+    event,
+    obj,
+    seconds_between,
+    tobj,
 )
 from ocelescope_module_streaming.stream.options import StreamOptions
-from ocelescope_module_streaming.stream.well_formed import MalformedStream, well_formed
-
-Stream = Iterable[StreamItem]
+from ocelescope_module_streaming.stream.well_formed import (
+    NotWellFormed,
+    WellFormednessChecker,
+    is_well_formed,
+    well_formed,
+)
 
 __all__ = [
     "AttributeUpdate",
-    "AttributeValue",
     "Content",
     "Event",
-    "MalformedStream",
+    "NotWellFormed",
     "O2OUpdate",
-    "ObjectRef",
     "Relation",
-    "Stream",
     "StreamItem",
     "StreamOptions",
+    "Timestamp",
+    "TypedObject",
+    "Value",
+    "WellFormednessChecker",
+    "event",
+    "is_well_formed",
+    "obj",
+    "seconds_between",
+    "tobj",
     "well_formed",
 ]
