@@ -1,11 +1,12 @@
 import { defineModule, defineModuleRoute } from "@ocelescope/core";
-import { SparklesIcon } from "lucide-react";
-import Hello from "./routes/Hello";
+import { WavesIcon } from "lucide-react";
+import StreamingPage from "./routes/StreamingPage";
 
-const helloRoute = defineModuleRoute({
-  name: "hello",
-  label: "Hello",
-  component: Hello,
+const streamingRoute = defineModuleRoute({
+  name: "replay",
+  label: "Streaming",
+  requiresOcel: true,
+  component: StreamingPage,
 });
 
 export default defineModule({
@@ -13,6 +14,6 @@ export default defineModule({
   label: "Streaming",
   description: "Object-centric process discovery on event streams with bounded buffers and eviction heuristics",
   authors: [{ name: "Menne, Sebastian" }],
-  icon: SparklesIcon,
-  routes: [helloRoute],
+  icon: WavesIcon,
+  routes: [streamingRoute],
 });

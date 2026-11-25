@@ -22,7 +22,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ocelescope_module_streaming.framework import Clock, Heuristic, PrivateBuffer, register_heuristic
+from ocelescope_module_streaming.framework import Clock, Heuristic, PrivateBuffer, PrivateBufferInfo, register_heuristic
 
 
 @register_heuristic
@@ -30,6 +30,7 @@ class FIFO(Heuristic[Any, Any]):
     name = "fifo"
     label = "FIFO"
     description = "Evicts the key that entered the buffer first: argmin first(ρ_k)."
+    private_info = (PrivateBufferInfo("first", "first(ρ_k): the position at which each key entered"),)
 
     def __init__(self, capacity: int | None, clock: Clock, params: BaseModel | None = None) -> None:
         super().__init__(capacity, clock, params)
@@ -55,6 +56,7 @@ class LRU(Heuristic[Any, Any]):
     name = "lru"
     label = "LRU"
     description = "Evicts the key whose last insertion is the oldest: argmin last(ρ_k)."
+    private_info = (PrivateBufferInfo("last", "last(ρ_k): the position of the last insertion of each key"),)
 
     def __init__(self, capacity: int | None, clock: Clock, params: BaseModel | None = None) -> None:
         super().__init__(capacity, clock, params)
@@ -78,6 +80,7 @@ class LFU(Heuristic[Any, Any]):
     name = "lfu"
     label = "LFU"
     description = "Evicts the key with the fewest insertions since it entered: argmin |ρ_k|."
+    private_info = (PrivateBufferInfo("count", "|ρ_k|: the number of insertions of each key"),)
 
     def __init__(self, capacity: int | None, clock: Clock, params: BaseModel | None = None) -> None:
         super().__init__(capacity, clock, params)
@@ -124,6 +127,7 @@ class LFUDA(Heuristic[Any, Any]):
         "Evicts the key that is used least and resided longest: argmin norm(first(ρ_k)) + norm(|ρ_k|), "
         "with min-max normalization over the buffered keys."
     )
+    private_info = (PrivateBufferInfo("first, count", "first(ρ_k) and |ρ_k| of each key"),)
 
     def __init__(self, capacity: int | None, clock: Clock, params: BaseModel | None = None) -> None:
         super().__init__(capacity, clock, params)
@@ -169,6 +173,7 @@ class RandomReplacement(Heuristic[Any, Any]):
     name = "random"
     label = "Random"
     description = "Evicts a buffered key chosen uniformly at random (seeded)."
+    private_info = (PrivateBufferInfo("keys", "keys(ρ), indexed for uniform choice"),)
     Params = RandomParams
 
     def __init__(self, capacity: int | None, clock: Clock, params: BaseModel | None = None) -> None:

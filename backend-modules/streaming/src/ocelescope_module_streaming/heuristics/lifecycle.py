@@ -19,7 +19,14 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from ocelescope_module_streaming.framework import Buffer, Clock, Heuristic, PrivateBuffer, register_heuristic
+from ocelescope_module_streaming.framework import (
+    Buffer,
+    Clock,
+    Heuristic,
+    PrivateBuffer,
+    PrivateBufferInfo,
+    register_heuristic,
+)
 from ocelescope_module_streaming.heuristics.cache import LFU
 
 
@@ -72,6 +79,15 @@ class Lifecycle(Heuristic[Any, Any]):
     )
     Params = LifecycleParams
     needs_lifecycle_values = True
+    private_info = (
+        PrivateBufferInfo("last", "last(ρ_o) with the object type and last activity of each object"),
+        PrivateBufferInfo(
+            "histogram",
+            "(object type, activity) → number of evictions ending there",
+            capacity="c_hist",
+            heuristic="lfu",
+        ),
+    )
 
     def __init__(self, capacity: int | None, clock: Clock, params: BaseModel | None = None) -> None:
         super().__init__(capacity, clock, params)

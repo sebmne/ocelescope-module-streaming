@@ -21,8 +21,12 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"peerDependencies": {
+		"@mantine/core": "catalog:",
+		"@mantine/hooks": "catalog:",
+		"@ocelescope/api-base": "catalog:",
 		"@ocelescope/api-client": "catalog:",
 		"@ocelescope/core": "catalog:",
+		"@ocelescope/resources": "catalog:",
 		"@tanstack/react-query": "catalog:",
 		"axios": "catalog:",
 		"lucide-react": "catalog:",
@@ -30,9 +34,13 @@
 		"react-dom": "catalog:"
 	},
 	"devDependencies": {
+		"@mantine/core": "catalog:",
+		"@mantine/hooks": "catalog:",
+		"@ocelescope/api-base": "catalog:",
 		"@ocelescope/api-client": "catalog:",
 		"@ocelescope/api-config": "catalog:",
 		"@ocelescope/core": "catalog:",
+		"@ocelescope/resources": "catalog:",
 		"@tanstack/react-query": "catalog:",
 		"@types/react": "catalog:",
 		"axios": "catalog:",

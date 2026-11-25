@@ -4,8 +4,11 @@ Object-centric process discovery on event streams with bounded buffers and evict
 
 An [Ocelescope](https://www.ocelescope.org) frontend module (`@instance/streaming`).
 
-- `src/index.ts` — module definition (name `streaming`, label, routes)
-- `src/routes/` — pages
+- `src/index.ts` — module definition (name `streaming`, route `replay`)
+- `src/routes/StreamingPage.tsx` — presets, algorithm, stream options and the list of replays
+- `src/components/TopologyEditor.tsx` — the buffer topology: capacities, heuristics and their
+  private buffers, editable per buffer
+- `src/components/ReplayView.tsx` — a live replay: controls, buffer fill and the current model
 - `src/api/` — typed API client for the `streaming` backend module,
   generated from its OpenAPI schema by `pnpm run build` (not committed)
 

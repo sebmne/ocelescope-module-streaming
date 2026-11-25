@@ -16,6 +16,7 @@ Each buffer gets its own heuristic instance, since H is a function of that buffe
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from collections.abc import Iterator, Sequence
+from dataclasses import dataclass
 from typing import Any, ClassVar, Generic, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -31,6 +32,24 @@ class NoParams(BaseModel):
     """Parameters of a heuristic without parameters."""
 
     model_config = ConfigDict(extra="forbid")
+
+
+@dataclass(frozen=True, slots=True)
+class PrivateBufferInfo:
+    """A description of a private buffer of a heuristic, for the catalog.
+
+    Attributes:
+        name: The name of the private buffer.
+        description: What it stores.
+        capacity: "c" if it has the capacity of the served buffer, otherwise the name of the
+            parameter that sets its capacity.
+        heuristic: The name of its own heuristic, for private buffers that are `Buffer`s.
+    """
+
+    name: str
+    description: str
+    capacity: str = "c"
+    heuristic: str | None = None
 
 
 class PrivateBuffer(Generic[K, S]):
@@ -103,6 +122,8 @@ class Heuristic(ABC, Generic[K, V]):
     Params: ClassVar[type[BaseModel]] = NoParams
     needs_lifecycle_values: ClassVar[bool] = False
     """Whether the heuristic reads an object type and an activity from the values of its buffer."""
+    private_info: ClassVar[tuple[PrivateBufferInfo, ...]] = ()
+    """Descriptions of the private buffers that `private_buffers` returns."""
 
     def __init__(self, capacity: int | None, clock: Clock, params: BaseModel | None = None) -> None:
         self.capacity = capacity
